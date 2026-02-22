@@ -172,6 +172,7 @@ pyrightconfig.json
 
 # Segredos — NUNCA versionar
 .secrets.toml
+keys/
 keys/private.pem
 
 # Banco de dados local
