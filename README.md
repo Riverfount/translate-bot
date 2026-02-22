@@ -47,7 +47,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### 2. Clonar o repositório
 
 ```bash
-git clone https://github.com/seu-usuario/translate-bot
+git clone https://github.com/Riverfount/translate-bot
 cd translate-bot
 ```
 
@@ -92,13 +92,13 @@ ENV_FOR_DYNACONF=production
 ### 6. Rodar o servidor
 
 ```bash
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:api --host 0.0.0.0 --port 8000
 ```
 
 Para desenvolvimento com hot-reload:
 
 ```bash
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn app.main:api --host 0.0.0.0 --port 8000 --reload
 ```
 
 ---
@@ -130,7 +130,7 @@ domain = "bot.seu-dominio.com"           # ← altere aqui
 Qualquer configuração pode ser sobrescrita via variável de ambiente com o prefixo `TRANSLATEBOT_`:
 
 ```bash
-TRANSLATEBOT_TARGET_LANGUAGE=en uv run uvicorn app.main:app
+TRANSLATEBOT_TARGET_LANGUAGE=en uv run uvicorn app.main:api
 ```
 
 ---
@@ -182,11 +182,20 @@ translate-bot/
 │   └── inbox_worker.py          # Worker de tradução
 ├── scripts/
 │   └── generate_keys.py         # Geração de chaves RSA
+├── tests/
+│   ├── conftest.py              # Fixtures compartilhadas
+│   ├── test_main.py             # Testes dos endpoints HTTP
+│   ├── test_handlers.py         # Testes dos handlers ActivityPub
+│   ├── test_inbox_worker.py     # Testes do worker de tradução
+│   ├── test_translate.py        # Testes do serviço de tradução
+│   └── test_actor_and_keys.py   # Testes do actor e chaves RSA
 ├── keys/                        # Chaves RSA (git-ignored)
 ├── settings.toml                # Configurações (versionado)
 ├── .secrets.toml                # Segredos (git-ignored)
+├── .env.example                 # Exemplo de variáveis de ambiente
 ├── pyproject.toml               # Dependências e metadados
-└── uv.lock                      # Lockfile (versionar no git)
+├── uv.lock                      # Lockfile (versionar no git)
+└── Dockerfile
 ```
 
 ---
