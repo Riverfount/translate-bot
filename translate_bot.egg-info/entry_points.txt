@@ -1,0 +1,2 @@
+[console_scripts]
+gen-keys = scripts.generate_keys:main

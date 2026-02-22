@@ -1,0 +1,15 @@
+[default]
+bot_username      = "translatebot"
+bot_display_name  = "Translate Bot 🌐"
+bot_summary       = "Mencione-me para traduzir qualquer post!"
+target_language   = "pt"
+database_url      = "sqlite+aiosqlite:///./bot.db"
+private_key_path  = "keys/private.pem"
+public_key_path   = "keys/public.pem"
+
+[development]
+domain       = "localhost"
+database_url = "sqlite+aiosqlite:///./bot_dev.db"
+
+[production]
+domain = "bot.exemplo.com"
