@@ -5,15 +5,17 @@ Cobre:
 - on_follow: actor remoto como string → busca e aceita
 - on_follow: actor remoto já como objeto APKitActor → aceita diretamente
 - on_follow: actor não resolúvel → retorna 400
-- on_create: qualquer Create → enfileira e retorna 202
+- on_create: enfileira ctx.activity (não ctx) e retorna 202
 - on_create: translate_text não é chamado diretamente
 """
 
-import pytest
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from apkit.models import Create, Follow, Note
 from fastapi import Response
 from fastapi.responses import JSONResponse
-from apkit.models import Follow, Create, Note
 
 
 def _make_follow_ctx(actor_value, bot_actor_url="https://bot.test/users/testbot"):
@@ -31,7 +33,7 @@ def _make_follow_ctx(actor_value, bot_actor_url="https://bot.test/users/testbot"
 def _make_create_ctx():
     note = Note(
         id="https://mastodon.social/statuses/1",
-        attributedTo="https://mastodon.social/users/fulano",
+        attributed_to="https://mastodon.social/users/fulano",
         content="<p>Olá</p>",
         to=["https://www.w3.org/ns/activitystreams#Public"],
     )
@@ -56,9 +58,9 @@ def _get_handlers():
             def decorator(fn):
                 handlers[activity_type.__name__] = fn
                 return fn
+
             return decorator
 
-    # Sem reload — usa o módulo já importado com os patches ativos
     from app.activitypub import handlers as handlers_module
     handlers_module.register_handlers(FakeApp())
     return handlers
@@ -122,31 +124,30 @@ async def test_on_follow_returns_400_when_actor_not_resolved():
 
 
 @pytest.mark.asyncio
-async def test_on_create_enqueues_ctx_and_returns_202():
-    import asyncio
-    from app.services import queue as queue_module
-
+async def test_on_create_enqueues_activity_not_ctx_and_returns_202():
+    """Verifica que ctx.activity é enfileirado, não o ctx inteiro."""
     test_queue: asyncio.Queue = asyncio.Queue()
     ctx = _make_create_ctx()
 
+    from app.services import queue as queue_module
     with patch.object(queue_module, "activity_queue", test_queue):
         handlers = _get_handlers()
         response = await handlers["Create"](ctx)
 
     assert response.status_code == 202
     assert not test_queue.empty()
-    queued_ctx = await test_queue.get()
-    assert queued_ctx is ctx
+    queued_item = await test_queue.get()
+    # deve ser o activity, não o ctx
+    assert queued_item is ctx.activity
+    assert isinstance(queued_item, Create)
 
 
 @pytest.mark.asyncio
 async def test_on_create_does_not_call_translate():
-    import asyncio
-    from app.services import queue as queue_module
-
     test_queue: asyncio.Queue = asyncio.Queue()
     ctx = _make_create_ctx()
 
+    from app.services import queue as queue_module
     with (
         patch.object(queue_module, "activity_queue", test_queue),
         patch("app.services.translate.translate_text") as mock_translate,

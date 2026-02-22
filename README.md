@@ -12,6 +12,8 @@ Bonjour tout le monde, comment ça va ?
 🌐 [FR → PT] Olá a todos, como vão vocês?
 ```
 
+Testado e funcionando com [Mastodon](https://joinmastodon.org/) e instâncias compatíveis com ActivityPub.
+
 ---
 
 ## Tecnologias
@@ -20,9 +22,9 @@ Bonjour tout le monde, comment ça va ?
 |---|---|
 | **[apkit](https://github.com/fedi-libs/apkit)** | Toolkit ActivityPub para Python — cuida de HTTP Signatures, WebFinger e NodeInfo |
 | **[FastAPI](https://fastapi.tiangolo.com/)** | Servidor web assíncrono (vem como dependência do apkit) |
-| **[Google Translate API](https://cloud.google.com/translate)** | Detecção de idioma e tradução |
+| **[Google Translate API](https://cloud.google.com/translate)** | Detecção automática de idioma e tradução |
 | **[Dynaconf](https://www.dynaconf.com/)** | Configuração por ambiente com suporte a secrets |
-| **[SQLAlchemy](https://www.sqlalchemy.org/) + SQLite** | Persistência leve, sem dependências externas |
+| **[SQLAlchemy](https://www.sqlalchemy.org/) + SQLite** | Persistência leve de followers, sem dependências externas |
 | **[uv](https://docs.astral.sh/uv/)** | Gerenciamento de dependências e ambiente virtual |
 
 ---
@@ -32,7 +34,7 @@ Bonjour tout le monde, comment ça va ?
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) instalado
 - Uma chave de API do [Google Cloud Translation](https://cloud.google.com/translate/docs/setup)
-- Um domínio com HTTPS apontando para o servidor (obrigatório para o protocolo ActivityPub)
+- Um domínio com HTTPS apontando para o servidor (obrigatório para ActivityPub)
 
 ---
 
@@ -76,7 +78,7 @@ Edite o `settings.toml` com o domínio do seu bot:
 domain = "bot.seu-dominio.com"
 ```
 
-Crie o arquivo `.secrets.toml` com sua API key (ele já está no `.gitignore`):
+Crie o arquivo `.secrets.toml` com sua API key (já está no `.gitignore`):
 
 ```toml
 [default]
@@ -85,7 +87,7 @@ google_translate_api_key = "AIza..."
 
 Para definir o ambiente ativo, crie um `.env` na raiz:
 
-```env
+```
 ENV_FOR_DYNACONF=production
 ```
 
@@ -105,7 +107,7 @@ uv run uvicorn app.main:api --host 0.0.0.0 --port 8000 --reload
 
 ## Configuração
 
-Todas as configurações ficam em `settings.toml`. Os segredos (API keys) ficam separados em `.secrets.toml`.
+Todas as configurações ficam em `settings.toml`. Os segredos ficam separados em `.secrets.toml`.
 
 ```toml
 # settings.toml
@@ -124,13 +126,13 @@ domain       = "localhost"
 database_url = "sqlite+aiosqlite:///./bot_dev.db"
 
 [production]
-domain = "bot.seu-dominio.com"           # ← altere aqui
+domain = "bot.seu-dominio.com"            # ← altere aqui
 ```
 
 Qualquer configuração pode ser sobrescrita via variável de ambiente com o prefixo `TRANSLATEBOT_`:
 
 ```bash
-TRANSLATEBOT_TARGET_LANGUAGE=en uv run uvicorn app.main:api
+TRANSLATEBOT_TARGET_LANGUAGE=en uv run uvicorn app.main:api --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -145,14 +147,14 @@ Mastodon / Misskey / etc.                Translate Bot
         │                                      │
         │                        verifica HTTP Signature (apkit)
         │                        enfileira na fila assíncrona
-        │                        retorna 202 Accepted
+        │                        retorna 202 Accepted imediatamente
         │                                      │
         │                        [worker em background]
         │                        extrai texto do post
         │                        detecta idioma de origem
         │                        traduz via Google Translate
         │                        monta Note de resposta
-        │                        assina e envia (apkit)
+        │                        assina com draft-cavage e envia
         │                                      │
         │  ◀── resposta traduzida na thread ───│
 ```
@@ -166,46 +168,54 @@ O handler do inbox retorna `202` imediatamente — servidores Mastodon têm time
 ```
 translate-bot/
 ├── app/
-│   ├── main.py                  # Servidor ActivityPub + endpoints
-│   ├── config.py                # Configurações (Dynaconf)
-│   ├── database.py              # Banco de dados SQLite
+│   ├── main.py                  # Servidor ActivityPub + endpoints FastAPI
+│   ├── config.py                # Configurações via Dynaconf
+│   ├── database.py              # Engine e sessão SQLAlchemy async
 │   ├── activitypub/
-│   │   ├── actor.py             # Perfil do bot
-│   │   ├── keys.py              # Chaves RSA
+│   │   ├── actor.py             # Perfil ActivityPub do bot
+│   │   ├── keys.py              # Carregamento das chaves RSA
 │   │   └── handlers.py          # Handlers de Follow e Create
 │   ├── models/
-│   │   └── follower.py          # Modelo ORM de followers
+│   │   └── follower.py          # ORM model de followers
 │   └── services/
 │       ├── translate.py         # Integração Google Translate
-│       └── queue.py             # Fila assíncrona
+│       └── queue.py             # Fila assíncrona asyncio
 ├── workers/
-│   └── inbox_worker.py          # Worker de tradução
+│   └── inbox_worker.py          # Worker de tradução em background
 ├── scripts/
 │   └── generate_keys.py         # Geração de chaves RSA
-├── tests/
-│   ├── conftest.py              # Fixtures compartilhadas
-│   ├── test_main.py             # Testes dos endpoints HTTP
-│   ├── test_handlers.py         # Testes dos handlers ActivityPub
-│   ├── test_inbox_worker.py     # Testes do worker de tradução
-│   ├── test_translate.py        # Testes do serviço de tradução
-│   └── test_actor_and_keys.py   # Testes do actor e chaves RSA
-├── keys/                        # Chaves RSA (git-ignored)
+├── tests/                       # Suite de testes (pytest + anyio)
+├── keys/                        # Chaves RSA — git-ignored
 ├── settings.toml                # Configurações (versionado)
-├── .secrets.toml                # Segredos (git-ignored)
+├── .secrets.toml                # Segredos — git-ignored
 ├── .env.example                 # Exemplo de variáveis de ambiente
+├── Dockerfile                   # Imagem para deploy
 ├── pyproject.toml               # Dependências e metadados
-├── uv.lock                      # Lockfile (versionar no git)
-└── Dockerfile
+└── uv.lock                      # Lockfile — deve ser versionado
 ```
+
+---
+
+## Testes
+
+```bash
+# Rodar todos os testes
+uv run pytest
+
+# Com cobertura
+uv run pytest --cov=app --cov=workers
+
+# Apenas um módulo
+uv run pytest tests/test_handlers.py -v
+```
+
+A suite cobre translate, inbox_worker, handlers, actor/keys e os endpoints principais do servidor.
 
 ---
 
 ## Comandos úteis
 
 ```bash
-# Rodar os testes
-uv run pytest
-
 # Verificar o código com o linter
 uv run ruff check .
 
@@ -237,8 +247,6 @@ docker run -d \
   translate-bot
 ```
 
-O `Dockerfile` usa cache de camadas otimizado — mudanças no código não reinstalam as dependências.
-
 ---
 
 ## HTTPS (obrigatório)
@@ -262,13 +270,35 @@ O Caddy obtém e renova o certificado Let's Encrypt automaticamente.
 
 ---
 
+## Teste local com ngrok
+
+Para testar sem um servidor público, use o [ngrok](https://ngrok.com/) para expor o servidor local:
+
+```bash
+# Terminal 1 — túnel ngrok
+ngrok http 8000
+
+# Terminal 2 — servidor
+uv run uvicorn app.main:api --host 0.0.0.0 --port 8000 --reload
+```
+
+Atualize o `settings.toml` com a URL do ngrok na seção `[development]` e defina `ENV_FOR_DYNACONF=development` no `.env`.
+
+---
+
 ## Notas
 
-> **apkit ainda não é estável.** A versão está fixada em `<0.4` no `pyproject.toml`. Antes de atualizar, leia o [CHANGELOG](https://github.com/fedi-libs/apkit/blob/main/CHANGELOG.md) do projeto.
+> **apkit ainda não é estável.** A versão está fixada no `pyproject.toml`. Antes de atualizar, leia o [CHANGELOG](https://github.com/fedi-libs/apkit/blob/main/CHANGELOG.md) do projeto.
 
-> **Google Translate cobra por caractere.** Para bots com alto volume, considere adicionar rate limiting por remetente no handler de `Create`.
+> **Google Translate cobra por caractere.** Para bots com alto volume, considere adicionar rate limiting por remetente no handler de `Create`. O plano gratuito oferece 500.000 caracteres/mês.
 
 > **`uv.lock` deve ser versionado no git.** Ele garante que produção use exatamente as mesmas versões que desenvolvimento.
+
+---
+
+## Autor
+
+Vicente Marçal — [@riverfount@bolha.us](https://bolha.us/@riverfount)
 
 ---
 

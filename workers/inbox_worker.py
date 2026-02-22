@@ -131,6 +131,7 @@ async def handle_create(activity: Create) -> None:
         return
 
     log.info(f"Enviando para {remote_actor.inbox} com key_id={key_id}")
+    log.info("DEBUG: chegou no bloco de envio")
     try:
         async with ActivityPubClient() as client:
             async with client.post(
