@@ -34,8 +34,7 @@ async def handle_create(activity: Create) -> None:
     note = activity.object
 
     log.info(
-        f"handle_create: actor={activity.actor}, "
-        f"note_content={getattr(note, 'content', None)}"
+        f"handle_create: actor={activity.actor}, note_content={getattr(note, 'content', None)}"
     )
 
     if not isinstance(note, Note):
@@ -63,9 +62,7 @@ async def handle_create(activity: Create) -> None:
     target_lang = settings.target_language.upper()
 
     # Dados do autor
-    author_url = (
-        activity.actor if isinstance(activity.actor, str) else activity.actor.id
-    )
+    author_url = activity.actor if isinstance(activity.actor, str) else activity.actor.id
     author_username = author_url.rstrip("/").split("/")[-1]
     author_domain = author_url.split("/")[2]
 
@@ -81,14 +78,8 @@ async def handle_create(activity: Create) -> None:
     )
 
     # IDs únicos
-    note_id = (
-        f"https://{settings.domain}/users/{settings.bot_username}"
-        f"/notes/{uuid.uuid4()}"
-    )
-    create_id = (
-        f"https://{settings.domain}/users/{settings.bot_username}"
-        f"/creates/{uuid.uuid4()}"
-    )
+    note_id = f"https://{settings.domain}/users/{settings.bot_username}/notes/{uuid.uuid4()}"
+    create_id = f"https://{settings.domain}/users/{settings.bot_username}/creates/{uuid.uuid4()}"
 
     reply_note = Note(
         id=note_id,
@@ -135,10 +126,10 @@ async def handle_create(activity: Create) -> None:
     try:
         async with ActivityPubClient() as client:
             async with client.post(
-                    remote_actor.inbox,
-                    json=reply_create,
-                    signatures=[ActorKey(key_id=key_id, private_key=priv_key)],
-                    sign_with=["draft-cavage"],
+                remote_actor.inbox,
+                json=reply_create,
+                signatures=[ActorKey(key_id=key_id, private_key=priv_key)],
+                sign_with=["draft-cavage"],
             ) as response:
                 body = await response.text()
                 log.info(f"Status: {response.status} — Resposta: {body[:500]}")

@@ -45,9 +45,7 @@ def register_handlers(app) -> None:
             follower_actor = activity.actor
 
         if not follower_actor:
-            return JSONResponse(
-                {"error": "Could not resolve follower"}, status_code=400
-            )
+            return JSONResponse({"error": "Could not resolve follower"}, status_code=400)
 
         actor = build_actor()
         accept = Accept(

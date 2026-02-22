@@ -4,7 +4,11 @@ from contextlib import asynccontextmanager
 
 from apkit.client import WebfingerLink, WebfingerResource, WebfingerResult
 from apkit.models import (
-    Nodeinfo, NodeinfoServices, NodeinfoSoftware, NodeinfoUsage, NodeinfoUsageUsers,
+    Nodeinfo,
+    NodeinfoServices,
+    NodeinfoSoftware,
+    NodeinfoUsage,
+    NodeinfoUsageUsers,
 )
 from apkit.server.app import ActivityPubServer
 from apkit.server.responses import ActivityResponse
@@ -24,6 +28,7 @@ actor = build_actor()
 async def lifespan(app):
     import app.database
     import workers.inbox_worker
+
     await app.database.init_db()
     worker_task = asyncio.create_task(workers.inbox_worker.run_worker())
     yield
@@ -74,26 +79,33 @@ async def nodeinfo():
 async def get_followers(identifier: str):
     if identifier != settings.bot_username:
         return JSONResponse({"error": "Not found"}, status_code=404)
-    return JSONResponse({
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "id": f"https://{settings.domain}/users/{identifier}/followers",
-        "type": "OrderedCollection",
-        "totalItems": 0,
-        "orderedItems": [],
-    }, media_type="application/activity+json")
+    return JSONResponse(
+        {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "id": f"https://{settings.domain}/users/{identifier}/followers",
+            "type": "OrderedCollection",
+            "totalItems": 0,
+            "orderedItems": [],
+        },
+        media_type="application/activity+json",
+    )
 
 
 @api.get("/users/{identifier}/outbox")
 async def get_outbox(identifier: str):
     if identifier != settings.bot_username:
         return JSONResponse({"error": "Not found"}, status_code=404)
-    return JSONResponse({
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "id": f"https://{settings.domain}/users/{identifier}/outbox",
-        "type": "OrderedCollection",
-        "totalItems": 0,
-        "orderedItems": [],
-    }, media_type="application/activity+json")
+    return JSONResponse(
+        {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "id": f"https://{settings.domain}/users/{identifier}/outbox",
+            "type": "OrderedCollection",
+            "totalItems": 0,
+            "orderedItems": [],
+        },
+        media_type="application/activity+json",
+    )
+
 
 @api.get("/health")
 async def health():

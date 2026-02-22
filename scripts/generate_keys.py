@@ -2,6 +2,7 @@
 Gera o par de chaves RSA para o bot.
 Uso: uv run python scripts/generate_keys.py
 """
+
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization

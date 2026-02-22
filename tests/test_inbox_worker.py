@@ -26,6 +26,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_rsa_key():
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -54,7 +55,7 @@ def _note_with_mention(extra_text: str = "Bonjour tout le monde") -> Note:
         content=(
             '<p><span class="mention">'
             '<a href="https://bot.test/users/testbot">@testbot</a>'
-            f'</span> {extra_text}</p>'
+            f"</span> {extra_text}</p>"
         ),
         to=["https://www.w3.org/ns/activitystreams#Public"],
     )
@@ -112,6 +113,7 @@ def _mock_ap_client(remote_actor):
 # Testes
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_handle_create_translates_and_calls_client_post():
     """Tradução ocorre e ActivityPubClient.post é chamado com Create assinado."""
@@ -122,13 +124,15 @@ async def test_handle_create_translates_and_calls_client_post():
     import workers.inbox_worker as worker_module
 
     with (
-        patch.object(worker_module, "translate_text",
-                     AsyncMock(
-                         return_value={"translated": "Olá a todos", "detected_source": "fr"})),
-        patch.object(worker_module, "ActivityPubClient",
-                     side_effect=[mock_fetch_client, mock_post_client]),
-        patch.object(worker_module, "get_bot_keys",
-                     AsyncMock(return_value=[_make_actor_key()])),
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá a todos", "detected_source": "fr"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
     ):
         await worker_module.handle_create(activity)
 
@@ -158,12 +162,15 @@ async def test_handle_create_reply_has_correct_in_reply_to():
     import workers.inbox_worker as worker_module
 
     with (
-        patch.object(worker_module, "translate_text",
-                     AsyncMock(return_value={"translated": "Olá", "detected_source": "en"})),
-        patch.object(worker_module, "ActivityPubClient",
-                     side_effect=[mock_fetch_client, mock_post_client]),
-        patch.object(worker_module, "get_bot_keys",
-                     AsyncMock(return_value=[_make_actor_key()])),
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "en"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
     ):
         await worker_module.handle_create(activity)
 
@@ -183,12 +190,15 @@ async def test_handle_create_reply_addressed_to_author():
     import workers.inbox_worker as worker_module
 
     with (
-        patch.object(worker_module, "translate_text",
-                     AsyncMock(return_value={"translated": "Olá", "detected_source": "en"})),
-        patch.object(worker_module, "ActivityPubClient",
-                     side_effect=[mock_fetch_client, mock_post_client]),
-        patch.object(worker_module, "get_bot_keys",
-                     AsyncMock(return_value=[_make_actor_key()])),
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "en"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
     ):
         await worker_module.handle_create(activity)
 
@@ -208,12 +218,15 @@ async def test_handle_create_reply_has_mention_tag():
     import workers.inbox_worker as worker_module
 
     with (
-        patch.object(worker_module, "translate_text",
-                     AsyncMock(return_value={"translated": "Olá", "detected_source": "en"})),
-        patch.object(worker_module, "ActivityPubClient",
-                     side_effect=[mock_fetch_client, mock_post_client]),
-        patch.object(worker_module, "get_bot_keys",
-                     AsyncMock(return_value=[_make_actor_key()])),
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "en"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
     ):
         await worker_module.handle_create(activity)
 
@@ -234,12 +247,15 @@ async def test_handle_create_uses_draft_cavage_signing():
     import workers.inbox_worker as worker_module
 
     with (
-        patch.object(worker_module, "translate_text",
-                     AsyncMock(return_value={"translated": "Olá", "detected_source": "en"})),
-        patch.object(worker_module, "ActivityPubClient",
-                     side_effect=[mock_fetch_client, mock_post_client]),
-        patch.object(worker_module, "get_bot_keys",
-                     AsyncMock(return_value=[_make_actor_key()])),
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "en"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
     ):
         await worker_module.handle_create(activity)
 
@@ -309,12 +325,15 @@ async def test_handle_create_logs_error_on_send_failure():
     import workers.inbox_worker as worker_module
 
     with (
-        patch.object(worker_module, "translate_text",
-                     AsyncMock(return_value={"translated": "Olá", "detected_source": "fr"})),
-        patch.object(worker_module, "ActivityPubClient",
-                     side_effect=[mock_fetch_client, mock_post_client]),
-        patch.object(worker_module, "get_bot_keys",
-                     AsyncMock(return_value=[_make_actor_key()])),
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "fr"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
         patch.object(worker_module, "log") as mock_log,
     ):
         await worker_module.handle_create(activity)

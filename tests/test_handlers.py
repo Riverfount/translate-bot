@@ -62,6 +62,7 @@ def _get_handlers():
             return decorator
 
     from app.activitypub import handlers as handlers_module
+
     handlers_module.register_handlers(FakeApp())
     return handlers
 
@@ -69,6 +70,7 @@ def _get_handlers():
 @pytest.mark.asyncio
 async def test_on_follow_with_actor_as_string_accepts_and_replies():
     from apkit.models import Actor as APKitActor
+
     mock_follower = MagicMock(spec=APKitActor)
     mock_follower.id = "https://mastodon.social/users/fulano"
     ctx = _make_follow_ctx("https://mastodon.social/users/fulano")
@@ -91,6 +93,7 @@ async def test_on_follow_with_actor_as_string_accepts_and_replies():
 @pytest.mark.asyncio
 async def test_on_follow_with_actor_as_object_skips_fetch():
     from apkit.models import Actor as APKitActor
+
     mock_follower = MagicMock(spec=APKitActor)
     mock_follower.id = "https://mastodon.social/users/fulano"
     ctx = _make_follow_ctx(mock_follower)
@@ -130,6 +133,7 @@ async def test_on_create_enqueues_activity_not_ctx_and_returns_202():
     ctx = _make_create_ctx()
 
     from app.services import queue as queue_module
+
     with patch.object(queue_module, "activity_queue", test_queue):
         handlers = _get_handlers()
         response = await handlers["Create"](ctx)
@@ -148,6 +152,7 @@ async def test_on_create_does_not_call_translate():
     ctx = _make_create_ctx()
 
     from app.services import queue as queue_module
+
     with (
         patch.object(queue_module, "activity_queue", test_queue),
         patch("app.services.translate.translate_text") as mock_translate,

@@ -24,12 +24,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
+from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
 
 # ---------------------------------------------------------------------------
 # Fixture do cliente de teste
 # ---------------------------------------------------------------------------
+
 
 @pytest_asyncio.fixture
 async def client():
@@ -40,8 +42,8 @@ async def client():
         from app.main import api
 
         async with AsyncClient(
-                transport=ASGITransport(app=api),
-                base_url="https://bot.test",
+            transport=ASGITransport(app=api),
+            base_url="https://bot.test",
         ) as ac:
             yield ac
 
@@ -49,6 +51,7 @@ async def client():
 # ---------------------------------------------------------------------------
 # GET /users/{identifier}
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_actor_returns_200_for_bot(client):
@@ -111,6 +114,7 @@ async def test_get_actor_returns_404_for_unknown_user(client):
 # GET /users/{identifier}/followers
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_followers_returns_200_for_bot(client):
     response = await client.get("/users/testbot/followers")
@@ -153,6 +157,7 @@ async def test_get_followers_returns_404_for_unknown_user(client):
 # ---------------------------------------------------------------------------
 # GET /users/{identifier}/outbox
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_outbox_returns_200_for_bot(client):
@@ -197,6 +202,7 @@ async def test_get_outbox_returns_404_for_unknown_user(client):
 # GET /.well-known/webfinger
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_webfinger_returns_200_for_bot(client):
     response = await client.get(
@@ -232,7 +238,7 @@ async def test_webfinger_body_has_self_link(client):
         params={"resource": "acct:testbot@bot.test"},
     )
     data = response.json()
-    self_links = [l for l in data["links"] if l["rel"] == "self"]
+    self_links = [link for link in data["links"] if link["rel"] == "self"]
     assert len(self_links) == 1
     assert self_links[0]["href"] == "https://bot.test/users/testbot"
     assert self_links[0]["type"] == "application/activity+json"
@@ -259,6 +265,7 @@ async def test_webfinger_returns_404_for_wrong_domain(client):
 # ---------------------------------------------------------------------------
 # GET /nodeinfo/2.1
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_nodeinfo_returns_200(client):
@@ -298,6 +305,7 @@ async def test_nodeinfo_open_registrations(client):
 # GET /health
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_health_returns_200(client):
     response = await client.get("/health")
@@ -314,14 +322,13 @@ async def test_health_body(client):
 # Lifespan: inicialização e shutdown
 # ---------------------------------------------------------------------------
 
-from asgi_lifespan import LifespanManager
-
 
 @pytest.mark.asyncio
 async def test_lifespan_calls_init_db():
     mock_init_db = AsyncMock()
 
     import sys
+
     sys.modules.pop("app.main", None)
 
     with (
@@ -329,6 +336,7 @@ async def test_lifespan_calls_init_db():
         patch("workers.inbox_worker.run_worker", AsyncMock()),
     ):
         from app.main import api
+
         async with LifespanManager(api):
             pass
 
@@ -340,6 +348,7 @@ async def test_lifespan_starts_worker():
     mock_run_worker = AsyncMock()
 
     import sys
+
     sys.modules.pop("app.main", None)
 
     with (
@@ -347,6 +356,7 @@ async def test_lifespan_starts_worker():
         patch("workers.inbox_worker.run_worker", mock_run_worker),
     ):
         from app.main import api
+
         async with LifespanManager(api):
             pass
 

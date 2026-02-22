@@ -48,6 +48,7 @@ async_session_factory = async_sessionmaker(
 # Base declarativa
 # ---------------------------------------------------------------------------
 
+
 class Base(DeclarativeBase):
     pass
 
@@ -55,6 +56,7 @@ class Base(DeclarativeBase):
 # ---------------------------------------------------------------------------
 # Dependência FastAPI
 # ---------------------------------------------------------------------------
+
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """
@@ -69,6 +71,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 # ---------------------------------------------------------------------------
 # Inicialização
 # ---------------------------------------------------------------------------
+
 
 async def init_db() -> None:
     """

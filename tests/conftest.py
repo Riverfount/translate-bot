@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 # Chaves RSA geradas em memória — evita dependência de arquivos em disco
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="session")
 def rsa_private_key():
     """Par de chaves RSA gerado uma única vez por sessão de testes."""
@@ -30,16 +31,21 @@ def rsa_private_key_pem(rsa_private_key) -> bytes:
 
 @pytest.fixture(scope="session")
 def rsa_public_key_pem(rsa_private_key) -> str:
-    return rsa_private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
+    return (
+        rsa_private_key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
 
 
 # ---------------------------------------------------------------------------
 # Configuração Dynaconf isolada para testes
 # Usa monkeypatch para sobrescrever os atributos sem tocar em arquivos .toml
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def patch_settings(monkeypatch, rsa_private_key_pem, rsa_public_key_pem, tmp_path):
@@ -52,23 +58,24 @@ def patch_settings(monkeypatch, rsa_private_key_pem, rsa_public_key_pem, tmp_pat
 
     # Escreve as chaves em arquivos temporários para os módulos que usam open()
     private_pem_path = tmp_path / "private.pem"
-    public_pem_path  = tmp_path / "public.pem"
+    public_pem_path = tmp_path / "public.pem"
     private_pem_path.write_bytes(rsa_private_key_pem)
     public_pem_path.write_text(rsa_public_key_pem)
 
-    monkeypatch.setattr(config.settings, "domain",                   "bot.test")
-    monkeypatch.setattr(config.settings, "bot_username",             "testbot")
-    monkeypatch.setattr(config.settings, "bot_display_name",         "Test Bot")
-    monkeypatch.setattr(config.settings, "bot_summary",              "Bot de teste")
-    monkeypatch.setattr(config.settings, "target_language",          "pt")
+    monkeypatch.setattr(config.settings, "domain", "bot.test")
+    monkeypatch.setattr(config.settings, "bot_username", "testbot")
+    monkeypatch.setattr(config.settings, "bot_display_name", "Test Bot")
+    monkeypatch.setattr(config.settings, "bot_summary", "Bot de teste")
+    monkeypatch.setattr(config.settings, "target_language", "pt")
     monkeypatch.setattr(config.settings, "google_translate_api_key", "fake-api-key")
-    monkeypatch.setattr(config.settings, "private_key_path",         str(private_pem_path))
-    monkeypatch.setattr(config.settings, "public_key_path",          str(public_pem_path))
+    monkeypatch.setattr(config.settings, "private_key_path", str(private_pem_path))
+    monkeypatch.setattr(config.settings, "public_key_path", str(public_pem_path))
 
 
 # ---------------------------------------------------------------------------
 # Factories de objetos apkit para uso nos testes
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def remote_actor_url() -> str:

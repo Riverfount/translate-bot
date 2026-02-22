@@ -21,5 +21,4 @@ def build_actor() -> Person:
             publicKeyPem=load_public_key_pem(),
         ),
         manuallyApprovesFollowers=False,
-
     )

@@ -127,9 +127,7 @@ async def test_translate_detected_source_fallback():
     """Se a API não retornar `detectedSourceLanguage`, deve usar '?' como fallback."""
     mock = MagicMock(spec=httpx.Response)
     mock.raise_for_status = MagicMock()
-    mock.json.return_value = {
-        "data": {"translations": [{"translatedText": "Texto"}]}
-    }
+    mock.json.return_value = {"data": {"translations": [{"translatedText": "Texto"}]}}
 
     with patch("app.services.translate.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
