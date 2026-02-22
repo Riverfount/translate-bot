@@ -2,22 +2,18 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+from apkit.client import WebfingerLink, WebfingerResource, WebfingerResult
+from apkit.models import (
+    Nodeinfo, NodeinfoServices, NodeinfoSoftware, NodeinfoUsage, NodeinfoUsageUsers,
+)
+from apkit.server.app import ActivityPubServer
+from apkit.server.responses import ActivityResponse
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
-from apkit.server.app import ActivityPubServer
-from apkit.server.responses import ActivityResponse
-from apkit.models import (
-    Nodeinfo, NodeinfoSoftware, NodeinfoProtocol,
-    NodeinfoServices, NodeinfoUsage, NodeinfoUsageUsers,
-)
-from apkit.client import WebfingerResource, WebfingerResult, WebfingerLink
-
-from app.config import settings
-from app.database import init_db
 from app.activitypub.actor import build_actor
 from app.activitypub.handlers import register_handlers
-from workers.inbox_worker import run_worker
+from app.config import settings
 
 logging.basicConfig(level=logging.INFO)
 
@@ -49,7 +45,7 @@ async def get_actor(identifier: str):
 @api.webfinger()
 async def webfinger(request: Request, acct: WebfingerResource) -> Response:
     if acct.username == settings.bot_username and acct.host == settings.domain:
-        link   = WebfingerLink(
+        link = WebfingerLink(
             rel="self",
             type="application/activity+json",
             href=f"https://{settings.domain}/users/{settings.bot_username}",
@@ -73,6 +69,31 @@ async def nodeinfo():
         )
     )
 
+
+@api.get("/users/{identifier}/followers")
+async def get_followers(identifier: str):
+    if identifier != settings.bot_username:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return JSONResponse({
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": f"https://{settings.domain}/users/{identifier}/followers",
+        "type": "OrderedCollection",
+        "totalItems": 0,
+        "orderedItems": [],
+    }, media_type="application/activity+json")
+
+
+@api.get("/users/{identifier}/outbox")
+async def get_outbox(identifier: str):
+    if identifier != settings.bot_username:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return JSONResponse({
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": f"https://{settings.domain}/users/{identifier}/outbox",
+        "type": "OrderedCollection",
+        "totalItems": 0,
+        "orderedItems": [],
+    }, media_type="application/activity+json")
 
 @api.get("/health")
 async def health():
