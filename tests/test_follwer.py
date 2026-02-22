@@ -24,9 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest_asyncio.fixture
 async def engine():
     from app.database import Base
+
     eng = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -49,14 +51,17 @@ async def session(session_factory):
 # Estrutura do modelo
 # ---------------------------------------------------------------------------
 
+
 def test_follower_tablename():
     from app.models.follower import Follower
+
     assert Follower.__tablename__ == "followers"
 
 
 def test_follower_primary_key_is_actor_url():
     from app.models.follower import Follower
     from sqlalchemy import inspect
+
     mapper = inspect(Follower)
     pk_cols = [col.key for col in mapper.primary_key]
     assert pk_cols == ["actor_url"]
@@ -65,6 +70,7 @@ def test_follower_primary_key_is_actor_url():
 def test_follower_has_inbox_url_column():
     from app.models.follower import Follower
     from sqlalchemy import inspect
+
     mapper = inspect(Follower)
     assert "inbox_url" in [col.key for col in mapper.columns]
 
@@ -72,6 +78,7 @@ def test_follower_has_inbox_url_column():
 def test_follower_has_followed_at_column():
     from app.models.follower import Follower
     from sqlalchemy import inspect
+
     mapper = inspect(Follower)
     assert "followed_at" in [col.key for col in mapper.columns]
 
@@ -79,6 +86,7 @@ def test_follower_has_followed_at_column():
 # ---------------------------------------------------------------------------
 # Persistência
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_follower_can_be_saved(session):
@@ -128,6 +136,7 @@ async def test_follower_inbox_url_persisted(session):
 # ---------------------------------------------------------------------------
 # followed_at
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_follower_followed_at_set_automatically(session):
@@ -192,6 +201,7 @@ async def test_follower_followed_at_not_overwritten_on_update(session):
 # __repr__
 # ---------------------------------------------------------------------------
 
+
 def test_follower_repr():
     from app.models.follower import Follower
 
@@ -207,23 +217,28 @@ def test_follower_repr():
 # Integridade e merge
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_follower_duplicate_actor_url_raises(session_factory):
     """INSERT duplicado deve levantar IntegrityError."""
     from app.models.follower import Follower
 
     async with session_factory() as s1:
-        s1.add(Follower(
-            actor_url="https://mastodon.social/users/fulano",
-            inbox_url="https://mastodon.social/users/fulano/inbox",
-        ))
+        s1.add(
+            Follower(
+                actor_url="https://mastodon.social/users/fulano",
+                inbox_url="https://mastodon.social/users/fulano/inbox",
+            )
+        )
         await s1.commit()
 
     async with session_factory() as s2:
-        s2.add(Follower(
-            actor_url="https://mastodon.social/users/fulano",
-            inbox_url="https://mastodon.social/users/fulano/inbox",
-        ))
+        s2.add(
+            Follower(
+                actor_url="https://mastodon.social/users/fulano",
+                inbox_url="https://mastodon.social/users/fulano/inbox",
+            )
+        )
         with pytest.raises(IntegrityError):
             await s2.commit()
 
@@ -234,17 +249,21 @@ async def test_follower_merge_avoids_duplicate(session_factory):
     from app.models.follower import Follower
 
     async with session_factory() as s1:
-        await s1.merge(Follower(
-            actor_url="https://mastodon.social/users/fulano",
-            inbox_url="https://mastodon.social/users/fulano/inbox",
-        ))
+        await s1.merge(
+            Follower(
+                actor_url="https://mastodon.social/users/fulano",
+                inbox_url="https://mastodon.social/users/fulano/inbox",
+            )
+        )
         await s1.commit()
 
     async with session_factory() as s2:
-        await s2.merge(Follower(
-            actor_url="https://mastodon.social/users/fulano",
-            inbox_url="https://mastodon.social/users/fulano/inbox_novo",
-        ))
+        await s2.merge(
+            Follower(
+                actor_url="https://mastodon.social/users/fulano",
+                inbox_url="https://mastodon.social/users/fulano/inbox_novo",
+            )
+        )
         await s2.commit()
 
     async with session_factory() as s3:

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 # Fixture: banco em memória isolado por teste
 # ---------------------------------------------------------------------------
 
+
 @pytest_asyncio.fixture
 async def test_engine():
     """Engine SQLite em memória — isolada por teste, sem tocar em arquivos."""
@@ -38,6 +39,7 @@ async def test_engine():
 async def test_session_factory(test_engine):
     """Fábrica de sessões apontando para o banco em memória."""
     from sqlalchemy.ext.asyncio import async_sessionmaker
+
     return async_sessionmaker(
         bind=test_engine,
         expire_on_commit=False,
@@ -49,9 +51,11 @@ async def test_session_factory(test_engine):
 # Engine
 # ---------------------------------------------------------------------------
 
+
 def test_engine_is_async_engine():
     """engine deve ser uma instância de AsyncEngine."""
     from app.database import engine
+
     assert isinstance(engine, AsyncEngine)
 
 
@@ -59,6 +63,7 @@ def test_engine_uses_configured_url():
     """engine deve usar a URL definida em settings.database_url."""
     from app.database import engine
     from app.config import settings
+
     assert str(engine.url) == settings.database_url
 
 
@@ -66,9 +71,11 @@ def test_engine_uses_configured_url():
 # async_session_factory
 # ---------------------------------------------------------------------------
 
+
 def test_async_session_factory_is_sessionmaker():
     """async_session_factory deve ser uma instância de async_sessionmaker."""
     from app.database import async_session_factory
+
     assert isinstance(async_session_factory, async_sessionmaker)
 
 
@@ -82,6 +89,7 @@ async def test_async_session_factory_produces_async_session(test_session_factory
 # ---------------------------------------------------------------------------
 # get_session
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_session_yields_async_session(test_session_factory):
@@ -121,6 +129,7 @@ async def test_get_session_commits_on_success(test_engine, test_session_factory)
         result = await verify_session.get(Follower, "https://mastodon.social/users/fulano")
         assert result is not None
 
+
 @pytest.mark.asyncio
 async def test_get_session_rollback_on_exception(test_engine, test_session_factory):
     """get_session deve fazer rollback quando uma exceção ocorre."""
@@ -129,6 +138,7 @@ async def test_get_session_rollback_on_exception(test_engine, test_session_facto
 
     async with test_engine.begin() as conn:
         from app.database import Base
+
         await conn.run_sync(Base.metadata.create_all)
 
     with patch("app.database.async_session_factory", test_session_factory):
@@ -154,6 +164,7 @@ async def test_get_session_rollback_on_exception(test_engine, test_session_facto
 # init_db
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_init_db_creates_tables():
     """init_db deve criar as tabelas no banco."""
@@ -164,12 +175,11 @@ async def test_init_db_creates_tables():
 
     with patch("app.database.engine", test_engine):
         from app.database import init_db
+
         await init_db()
 
     async with test_engine.connect() as conn:
-        tables = await conn.run_sync(
-            lambda sync_conn: inspect(sync_conn).get_table_names()
-        )
+        tables = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_table_names())
     assert "followers" in tables
 
     await test_engine.dispose()
@@ -184,9 +194,10 @@ async def test_init_db_imports_follower_model():
 
     with (
         patch("app.database.engine", test_engine),
-        patch("app.models.follower") as mock_follower_module,
+        patch("app.models.follower"),
     ):
         from app.database import init_db
+
         await init_db()
 
     await test_engine.dispose()
@@ -203,6 +214,7 @@ async def test_init_db_is_idempotent():
 
     with patch("app.database.engine", test_engine):
         from app.database import init_db
+
         await init_db()
         await init_db()  # segunda chamada não deve lançar exceção
 
