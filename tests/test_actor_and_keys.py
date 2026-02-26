@@ -69,7 +69,6 @@ def test_build_actor_public_key_pem_is_not_empty():
     assert "BEGIN PUBLIC KEY" in build_actor().public_key.public_key_pem
 
 
-
 def test_build_actor_display_name():
     from app.activitypub.actor import build_actor
 
