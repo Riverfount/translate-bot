@@ -12,9 +12,11 @@ Fluxo:
 """
 
 import asyncio
+import html
 import logging
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from apkit.client.asyncio.client import ActivityPubClient
 from apkit.models import Create, Note
@@ -28,6 +30,9 @@ from app.services.queue import activity_queue
 from app.services.translate import translate_text
 
 log = logging.getLogger(__name__)
+
+# Limite da API Google Translate v2 por requisição
+MAX_TRANSLATE_CHARS = 500
 
 
 async def handle_create(activity: Create) -> None:
@@ -55,6 +60,10 @@ async def handle_create(activity: Create) -> None:
     if not plain_text:
         return
 
+    if len(plain_text) > MAX_TRANSLATE_CHARS:
+        log.warning(f"Texto truncado de {len(plain_text)} para {MAX_TRANSLATE_CHARS} caracteres")
+        plain_text = plain_text[:MAX_TRANSLATE_CHARS]
+
     # Traduz o texto
     result = await translate_text(plain_text)
     translated = result["translated"]
@@ -63,18 +72,26 @@ async def handle_create(activity: Create) -> None:
 
     # Dados do autor
     author_url = activity.actor if isinstance(activity.actor, str) else activity.actor.id
-    author_username = author_url.rstrip("/").split("/")[-1]
-    author_domain = author_url.split("/")[2]
+    parsed_author = urlparse(author_url)
+    if not parsed_author.scheme or not parsed_author.netloc:
+        log.error(f"URL de actor inválida: {author_url!r}")
+        return
+    author_domain = parsed_author.netloc
+    author_username = parsed_author.path.rstrip("/").split("/")[-1]
 
     # Busca o actor remoto
-    async with ActivityPubClient() as client:
-        remote_actor = await client.actor.fetch(author_url)
+    try:
+        async with ActivityPubClient() as client:
+            remote_actor = await client.actor.fetch(author_url)
+    except Exception as e:
+        log.error(f"Não foi possível resolver o actor {author_url}: {e}", exc_info=True)
+        return
 
     # Monta o HTML de resposta
     reply_html = (
         f'<p><span class="h-card"><a href="{author_url}">@{author_username}</a></span> '
         f"🌐 <strong>[{source_lang} → {target_lang}]</strong><br>"
-        f"{translated}</p>"
+        f"{html.escape(translated)}</p>"
     )
 
     # IDs únicos
@@ -122,7 +139,6 @@ async def handle_create(activity: Create) -> None:
         return
 
     log.info(f"Enviando para {remote_actor.inbox} com key_id={key_id}")
-    log.info("DEBUG: chegou no bloco de envio")
     try:
         async with ActivityPubClient() as client:
             async with client.post(

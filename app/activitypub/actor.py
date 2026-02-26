@@ -10,15 +10,14 @@ def build_actor() -> Person:
     return Person(
         id=actor_url,
         name=settings.bot_display_name,
-        preferredUsername=settings.bot_username,
+        preferred_username=settings.bot_username,
         summary=settings.bot_summary,
         inbox=f"{actor_url}/inbox",
         followers=f"https://{settings.domain}/users/{settings.bot_username}/followers",
         outbox=f"https://{settings.domain}/users/{settings.bot_username}/outbox",
-        publicKey=CryptographicKey(
+        public_key=CryptographicKey(
             id=f"{actor_url}#main-key",
             owner=actor_url,
-            publicKeyPem=load_public_key_pem(),
+            public_key_pem=load_public_key_pem(),
         ),
-        manuallyApprovesFollowers=False,
     )

@@ -99,7 +99,7 @@ def make_note(bot_actor_url):
     ) -> Note:
         return Note(
             id=note_id,
-            attributedTo=attributed_to,
+            attributed_to=attributed_to,
             content=content,
             to=["https://www.w3.org/ns/activitystreams#Public"],
             cc=[bot_actor_url],

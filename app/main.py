@@ -33,6 +33,10 @@ async def lifespan(app):
     worker_task = asyncio.create_task(workers.inbox_worker.run_worker())
     yield
     worker_task.cancel()
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        pass
 
 
 api = ActivityPubServer(lifespan=lifespan)

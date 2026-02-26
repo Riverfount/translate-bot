@@ -20,4 +20,4 @@ COPY . .
 RUN uv sync --frozen --no-group dev
 
 # uv run ativa o venv automaticamente — não precisa de source .venv/bin/activate
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "app.main:api", "--host", "0.0.0.0", "--port", "8000"]

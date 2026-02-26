@@ -4,7 +4,7 @@ Testes para app/activitypub/actor.py e app/activitypub/keys.py
 Cobre:
 - build_actor(): estrutura e campos do objeto Person gerado
 - build_actor(): URLs construídas a partir do domínio das settings
-- build_actor(): chave pública embutida no publicKey
+- build_actor(): chave pública embutida no public_key
 - get_keys_for_actor(): retorna ActorKey para o username correto
 - get_keys_for_actor(): retorna lista vazia para username desconhecido
 - load_private_key(): carrega PEM do disco corretamente
@@ -68,11 +68,6 @@ def test_build_actor_public_key_pem_is_not_empty():
 
     assert "BEGIN PUBLIC KEY" in build_actor().public_key.public_key_pem
 
-
-def test_build_actor_does_not_approve_followers_manually():
-    from app.activitypub.actor import build_actor
-
-    assert build_actor().manuallyApprovesFollowers is False
 
 
 def test_build_actor_display_name():
