@@ -1,14 +1,15 @@
 [default]
-bot_username      = "translatebot"
-bot_display_name  = "Translate Bot 🌐"
-bot_summary       = "Mencione-me para traduzir qualquer post!"
-target_language   = "pt"
-database_url      = "sqlite+aiosqlite:///./bot.db"
-private_key_path  = "keys/private.pem"
-public_key_path   = "keys/public.pem"
+bot_username = "translatebot"
+bot_display_name = "Translate Bot 🌐"
+bot_summary = "Mencione-me para traduzir qualquer post!"
+target_language = "pt"
+libretranslate_url = "https://libretranslate.bolha.tools/translate"
+database_url = "sqlite+aiosqlite:///./bot.db"
+private_key_path = "keys/private.pem"
+public_key_path = "keys/public.pem"
 
 [development]
-domain       = "localhost"
+domain = "0bfe-189-14-58-11.ngrok-free.app"
 database_url = "sqlite+aiosqlite:///./bot_dev.db"
 
 [production]
