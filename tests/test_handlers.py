@@ -161,3 +161,21 @@ async def test_on_create_does_not_call_translate():
         await handlers["Create"](ctx)
 
     mock_translate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_on_follow_returns_400_when_actor_is_unknown_type():
+    """Actor que não é string nem APKitActor → follower_actor fica None → retorna 400."""
+    # Follow usa Pydantic e só aceita str|Actor, então montamos o ctx manualmente
+    activity = MagicMock()
+    activity.actor = object()  # nem str nem APKitActor
+    ctx = MagicMock()
+    ctx.activity = activity
+    ctx.send = AsyncMock()
+
+    handlers = _get_handlers()
+    response = await handlers["Follow"](ctx)
+
+    ctx.send.assert_not_called()
+    assert isinstance(response, JSONResponse)
+    assert response.status_code == 400

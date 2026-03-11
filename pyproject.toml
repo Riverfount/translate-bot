@@ -50,7 +50,19 @@ exclude = ["keys*", "scripts*", "tests*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+tmp_path_retention_policy = "none"
+addopts = "--cov=app --cov=workers --cov-report=term-missing"
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+omit = ["tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
 ]
