@@ -68,7 +68,7 @@ def patch_settings(monkeypatch, rsa_private_key_pem, rsa_public_key_pem, tmp_pat
     monkeypatch.setattr(config.settings, "bot_summary", "Bot de teste")
     monkeypatch.setattr(config.settings, "target_language", "pt")
     monkeypatch.setattr(config.settings, "libretranslate_url", "http://libretranslate.test")
-    monkeypatch.setattr(config.settings, "libretranslate_api_key", "fake-api-key", raising=False)
+    monkeypatch.setattr(config.settings, "libretranslate_api_key", "fake-api-key")
     monkeypatch.setattr(config.settings, "private_key_path", str(private_pem_path))
     monkeypatch.setattr(config.settings, "public_key_path", str(public_pem_path))
 
