@@ -22,7 +22,7 @@ Testado e funcionando com [Mastodon](https://joinmastodon.org/) e instâncias co
 |---|---|
 | **[apkit](https://github.com/fedi-libs/apkit)** | Toolkit ActivityPub para Python — cuida de HTTP Signatures, WebFinger e NodeInfo |
 | **[FastAPI](https://fastapi.tiangolo.com/)** | Servidor web assíncrono (vem como dependência do apkit) |
-| **[Google Translate API](https://cloud.google.com/translate)** | Detecção automática de idioma e tradução |
+| **[LibreTranslate](https://libretranslate.com/)** | Detecção automática de idioma e tradução — open source, self-hostável |
 | **[Dynaconf](https://www.dynaconf.com/)** | Configuração por ambiente com suporte a secrets |
 | **[SQLAlchemy](https://www.sqlalchemy.org/) + SQLite** | Persistência leve de followers, sem dependências externas |
 | **[uv](https://docs.astral.sh/uv/)** | Gerenciamento de dependências e ambiente virtual |
@@ -33,7 +33,7 @@ Testado e funcionando com [Mastodon](https://joinmastodon.org/) e instâncias co
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) instalado
-- Uma chave de API do [Google Cloud Translation](https://cloud.google.com/translate/docs/setup)
+- Acesso a uma instância [LibreTranslate](https://libretranslate.com/) (pública ou self-hosted)
 - Um domínio com HTTPS apontando para o servidor (obrigatório para ActivityPub)
 
 ---
@@ -78,12 +78,14 @@ Edite o `settings.toml` com o domínio do seu bot:
 domain = "bot.seu-dominio.com"
 ```
 
-Crie o arquivo `.secrets.toml` com sua API key (já está no `.gitignore`):
+Crie o arquivo `.secrets.toml` com a API key da instância LibreTranslate, se necessário (já está no `.gitignore`):
 
 ```toml
 [default]
-google_translate_api_key = "AIza..."
+libretranslate_api_key = "sua-chave-aqui"
 ```
+
+> Instâncias self-hosted sem autenticação podem deixar a chave em branco. A instância padrão `https://libretranslate.com` exige chave.
 
 Para definir o ambiente ativo, crie um `.env` na raiz:
 
@@ -113,20 +115,22 @@ Todas as configurações ficam em `settings.toml`. Os segredos ficam separados e
 # settings.toml
 
 [default]
-bot_username      = "translatebot"        # usuário do bot no Fediverso
-bot_display_name  = "Translate Bot 🌐"
-bot_summary       = "Mencione-me para traduzir qualquer post!"
-target_language   = "pt"                  # idioma padrão de destino
-database_url      = "sqlite+aiosqlite:///./bot.db"
-private_key_path  = "keys/private.pem"
-public_key_path   = "keys/public.pem"
+bot_username         = "translatebot"        # usuário do bot no Fediverso
+bot_display_name     = "Translate Bot 🌐"
+bot_summary          = "Mencione-me para traduzir qualquer post!"
+target_language      = "pt"                  # idioma padrão de destino
+libretranslate_url   = "https://libretranslate.com"  # instância LibreTranslate
+libretranslate_api_key = ""                  # deixe em branco se não exigir chave
+database_url         = "sqlite+aiosqlite:///./bot.db"
+private_key_path     = "keys/private.pem"
+public_key_path      = "keys/public.pem"
 
 [development]
 domain       = "localhost"
 database_url = "sqlite+aiosqlite:///./bot_dev.db"
 
 [production]
-domain = "bot.seu-dominio.com"            # ← altere aqui
+domain = "bot.seu-dominio.com"               # ← altere aqui
 ```
 
 Qualquer configuração pode ser sobrescrita via variável de ambiente com o prefixo `TRANSLATEBOT_`:
@@ -152,7 +156,7 @@ Mastodon / Misskey / etc.                Translate Bot
         │                        [worker em background]
         │                        extrai texto do post
         │                        detecta idioma de origem
-        │                        traduz via Google Translate
+        │                        traduz via LibreTranslate
         │                        monta Note de resposta
         │                        assina com draft-cavage e envia
         │                                      │
@@ -178,7 +182,7 @@ translate-bot/
 │   ├── models/
 │   │   └── follower.py          # ORM model de followers
 │   └── services/
-│       ├── translate.py         # Integração Google Translate
+│       ├── translate.py         # Integração LibreTranslate
 │       └── queue.py             # Fila assíncrona asyncio
 ├── workers/
 │   └── inbox_worker.py          # Worker de tradução em background
@@ -199,17 +203,14 @@ translate-bot/
 ## Testes
 
 ```bash
-# Rodar todos os testes
+# Rodar todos os testes (cobertura incluída automaticamente)
 uv run pytest
-
-# Com cobertura
-uv run pytest --cov=app --cov=workers
 
 # Apenas um módulo
 uv run pytest tests/test_handlers.py -v
 ```
 
-A suite cobre translate, inbox_worker, handlers, actor/keys e os endpoints principais do servidor.
+A cobertura é configurada automaticamente via `pyproject.toml` (branch coverage). A suite cobre translate, inbox_worker, handlers, actor/keys e os endpoints principais do servidor.
 
 ---
 
@@ -243,7 +244,8 @@ docker run -d \
   -v $(pwd)/keys:/app/keys \
   -v $(pwd)/bot.db:/app/bot.db \
   -e ENV_FOR_DYNACONF=production \
-  -e TRANSLATEBOT_GOOGLE_TRANSLATE_API_KEY=AIza... \
+  -e TRANSLATEBOT_LIBRETRANSLATE_URL=https://libretranslate.com \
+  -e TRANSLATEBOT_LIBRETRANSLATE_API_KEY=sua-chave-aqui \
   translate-bot
 ```
 
@@ -290,7 +292,7 @@ Atualize o `settings.toml` com a URL do ngrok na seção `[development]` e defin
 
 > **apkit ainda não é estável.** A versão está fixada no `pyproject.toml`. Antes de atualizar, leia o [CHANGELOG](https://github.com/fedi-libs/apkit/blob/main/CHANGELOG.md) do projeto.
 
-> **Google Translate cobra por caractere.** Para bots com alto volume, considere adicionar rate limiting por remetente no handler de `Create`. O plano gratuito oferece 500.000 caracteres/mês.
+> **LibreTranslate é open source e self-hostável.** Para maior controle e sem custos por caractere, considere rodar sua própria instância. Instruções em [libretranslate.com](https://libretranslate.com/). O limite de 500 caracteres por requisição é configurável no código.
 
 > **`uv.lock` deve ser versionado no git.** Ele garante que produção use exatamente as mesmas versões que desenvolvimento.
 

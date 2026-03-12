@@ -365,6 +365,121 @@ async def test_run_worker_processes_activity_from_queue():
 
 
 @pytest.mark.asyncio
+async def test_handle_create_truncates_long_text():
+    """Texto acima de 500 caracteres deve ser truncado antes de ser traduzido."""
+    long_text = "A" * 600
+    note = Note(
+        id="https://mastodon.social/statuses/10",
+        attributed_to="https://mastodon.social/users/fulano",
+        content=(
+            '<p><span class="mention">'
+            '<a href="https://bot.test/users/testbot">@testbot</a>'
+            f"</span> {long_text}</p>"
+        ),
+        to=["https://www.w3.org/ns/activitystreams#Public"],
+    )
+    activity = _build_activity(note)
+    remote_actor = _make_remote_actor()
+    mock_fetch_client, mock_post_client = _mock_ap_client(remote_actor)
+
+    import workers.inbox_worker as worker_module
+
+    with (
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Texto traduzido", "detected_source": "en"}),
+        ) as mock_translate,
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
+    ):
+        await worker_module.handle_create(activity)
+
+    translated_text = mock_translate.call_args[0][0]
+    assert len(translated_text) == 500
+
+
+@pytest.mark.asyncio
+async def test_handle_create_ignores_invalid_actor_url():
+    """Actor com URL inválida (sem scheme/netloc) → não tenta buscar actor remoto."""
+    activity = _build_activity(_note_with_mention("Hello"), actor_url="not-a-valid-url")
+
+    import workers.inbox_worker as worker_module
+
+    with (
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "en"}),
+        ),
+        patch.object(worker_module, "ActivityPubClient") as mock_ap_client,
+    ):
+        await worker_module.handle_create(activity)
+
+    mock_ap_client.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_create_logs_error_when_actor_fetch_fails():
+    """Falha ao buscar actor remoto → erro logado, sem propagar exceção."""
+    activity = _build_activity(_note_with_mention("Hello"))
+
+    mock_fetch_instance = MagicMock()
+    mock_fetch_instance.actor.fetch = AsyncMock(side_effect=Exception("connection refused"))
+    mock_fetch_client = AsyncMock()
+    mock_fetch_client.__aenter__ = AsyncMock(return_value=mock_fetch_instance)
+    mock_fetch_client.__aexit__ = AsyncMock(return_value=False)
+
+    import workers.inbox_worker as worker_module
+
+    with (
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "en"}),
+        ),
+        patch.object(worker_module, "ActivityPubClient", return_value=mock_fetch_client),
+        patch.object(worker_module, "log") as mock_log,
+    ):
+        await worker_module.handle_create(activity)
+
+    mock_log.error.assert_called_once()
+    assert "connection refused" in str(mock_log.error.call_args)
+
+
+@pytest.mark.asyncio
+async def test_handle_create_logs_error_when_no_rsa_key():
+    """Quando nenhuma chave RSA está disponível, loga erro e não envia resposta."""
+    non_rsa_key = MagicMock(spec=ActorKey)
+    non_rsa_key.private_key = MagicMock()  # não é rsa_module.RSAPrivateKey
+
+    activity = _build_activity(_note_with_mention("Hello"))
+    remote_actor = _make_remote_actor()
+    mock_fetch_client, mock_post_client = _mock_ap_client(remote_actor)
+
+    import workers.inbox_worker as worker_module
+
+    with (
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "en"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[non_rsa_key])),
+        patch.object(worker_module, "log") as mock_log,
+    ):
+        await worker_module.handle_create(activity)
+
+    mock_log.error.assert_called_once()
+    mock_post_client.__aenter__.return_value.post.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_run_worker_continues_after_error():
     """run_worker processa o segundo item mesmo que o primeiro falhe."""
     activity1 = _build_activity(_note_without_mention())

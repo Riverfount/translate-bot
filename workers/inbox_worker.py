@@ -7,7 +7,7 @@ Fluxo:
 1. Consome atividades da fila (activity_queue)
 2. Verifica se o bot foi mencionado no post
 3. Extrai o texto puro removendo tags HTML
-4. Traduz via Google Translate
+4. Traduz via LibreTranslate
 5. Monta um Note de resposta e entrega no inbox do autor
 """
 
@@ -31,7 +31,6 @@ from app.services.translate import translate_text
 
 log = logging.getLogger(__name__)
 
-# Limite da API Google Translate v2 por requisição
 MAX_TRANSLATE_CHARS = 500
 
 

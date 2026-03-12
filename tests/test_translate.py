@@ -5,8 +5,8 @@ Cobre:
 - Tradução bem-sucedida com detecção de idioma
 - Uso do idioma padrão das settings quando `target` não é passado
 - Uso do idioma explícito quando passado como argumento
-- API key enviada corretamente como query param
-- Fallback "?" quando detectedSourceLanguage está ausente
+- API key enviada corretamente no body da requisição
+- Fallback "?" quando detectedLanguage está ausente
 - Erros HTTP da API (4xx, 5xx)
 - Timeout da requisição
 """
@@ -19,18 +19,12 @@ from app.services.translate import translate_text
 
 
 def _mock_response(translated: str, detected: str, status: int = 200) -> MagicMock:
-    """Monta um httpx.Response fake com a estrutura da Google Translate API v2."""
+    """Monta um httpx.Response fake com a estrutura da LibreTranslate API."""
     mock = MagicMock(spec=httpx.Response)
     mock.status_code = status
     mock.json.return_value = {
-        "data": {
-            "translations": [
-                {
-                    "translatedText": translated,
-                    "detectedSourceLanguage": detected,
-                }
-            ]
-        }
+        "translatedText": translated,
+        "detectedLanguage": {"language": detected, "confidence": 0.9},
     }
     mock.raise_for_status = MagicMock()
     return mock
@@ -106,7 +100,7 @@ async def test_translate_uses_explicit_target_language():
 
 @pytest.mark.asyncio
 async def test_translate_sends_api_key():
-    """A API key das settings deve ser enviada como query param."""
+    """A API key das settings deve ser enviada no body da requisição."""
     mock_resp = _mock_response(translated="X", detected="en")
 
     with patch("app.services.translate.httpx.AsyncClient") as mock_client_cls:
@@ -119,15 +113,51 @@ async def test_translate_sends_api_key():
         await translate_text("test")
 
         _, kwargs = mock_client.post.call_args
-        assert kwargs["params"]["key"] == "fake-api-key"
+        assert kwargs["json"]["api_key"] == "fake-api-key"
+
+
+@pytest.mark.asyncio
+async def test_translate_sends_source_auto():
+    """O campo `source` deve sempre ser enviado como "auto"."""
+    mock_resp = _mock_response(translated="X", detected="en")
+
+    with patch("app.services.translate.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_client_cls.return_value = mock_client
+
+        await translate_text("test")
+
+        _, kwargs = mock_client.post.call_args
+        assert kwargs["json"]["source"] == "auto"
+
+
+@pytest.mark.asyncio
+async def test_translate_uses_libretranslate_url():
+    """A URL da instância LibreTranslate deve ser usada no endpoint."""
+    mock_resp = _mock_response(translated="X", detected="en")
+
+    with patch("app.services.translate.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_client_cls.return_value = mock_client
+
+        await translate_text("test")
+
+        url, _ = mock_client.post.call_args
+        assert url[0] == "http://libretranslate.test/translate"
 
 
 @pytest.mark.asyncio
 async def test_translate_detected_source_fallback():
-    """Se a API não retornar `detectedSourceLanguage`, deve usar '?' como fallback."""
+    """Se a API não retornar `detectedLanguage`, deve usar '?' como fallback."""
     mock = MagicMock(spec=httpx.Response)
     mock.raise_for_status = MagicMock()
-    mock.json.return_value = {"data": {"translations": [{"translatedText": "Texto"}]}}
+    mock.json.return_value = {"translatedText": "Texto"}
 
     with patch("app.services.translate.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
