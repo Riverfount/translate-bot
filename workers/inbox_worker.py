@@ -26,6 +26,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa as rsa_module
 
 from app.activitypub.keys import get_bot_keys
 from app.config import settings
+from app.services.note_store import store_note
 from app.services.queue import activity_queue
 from app.services.translate import translate_text
 
@@ -113,6 +114,8 @@ async def handle_create(activity: Create) -> None:
             }
         ],
     )
+
+    store_note(note_id, reply_note)
 
     reply_create = Create(
         id=create_id,

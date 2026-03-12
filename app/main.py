@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from app.activitypub.actor import build_actor
 from app.activitypub.handlers import register_handlers
 from app.config import settings
+from app.services.note_store import get_note
 
 logging.basicConfig(level=logging.INFO)
 
@@ -53,13 +54,18 @@ async def get_actor(identifier: str):
 
 @api.webfinger()
 async def webfinger(request: Request, acct: WebfingerResource) -> Response:
-    if acct.username == settings.bot_username and acct.host == settings.domain:
+    bot_actor_url = f"https://{settings.domain}/users/{settings.bot_username}"
+    is_match = (
+        acct.username == settings.bot_username and acct.host == settings.domain
+    ) or acct.url == bot_actor_url
+    if is_match:
+        bot_subject = WebfingerResource(username=settings.bot_username, host=settings.domain)
         link = WebfingerLink(
             rel="self",
             type="application/activity+json",
-            href=f"https://{settings.domain}/users/{settings.bot_username}",
+            href=bot_actor_url,
         )
-        result = WebfingerResult(subject=acct, links=[link])
+        result = WebfingerResult(subject=bot_subject, links=[link])
         return JSONResponse(result.to_json(), media_type="application/jrd+json")
     return JSONResponse({"error": "Not found"}, status_code=404)
 
@@ -109,6 +115,16 @@ async def get_outbox(identifier: str):
         },
         media_type="application/activity+json",
     )
+
+
+@api.get("/users/{identifier}/notes/{note_id}")
+async def get_note_endpoint(identifier: str, note_id: str):
+    if identifier != settings.bot_username:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    note = get_note(note_id)
+    if note is None:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return ActivityResponse(note)
 
 
 @api.get("/health")

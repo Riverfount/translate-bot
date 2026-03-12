@@ -262,6 +262,82 @@ async def test_webfinger_returns_404_for_wrong_domain(client):
     assert response.status_code == 404
 
 
+@pytest.mark.asyncio
+async def test_webfinger_returns_200_for_https_url(client):
+    response = await client.get(
+        "/.well-known/webfinger",
+        params={"resource": "https://bot.test/users/testbot"},
+    )
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_webfinger_https_url_body_has_subject(client):
+    response = await client.get(
+        "/.well-known/webfinger",
+        params={"resource": "https://bot.test/users/testbot"},
+    )
+    data = response.json()
+    assert data["subject"] == "acct:testbot@bot.test"
+
+
+@pytest.mark.asyncio
+async def test_webfinger_https_url_body_has_self_link(client):
+    response = await client.get(
+        "/.well-known/webfinger",
+        params={"resource": "https://bot.test/users/testbot"},
+    )
+    data = response.json()
+    self_links = [link for link in data["links"] if link["rel"] == "self"]
+    assert len(self_links) == 1
+    assert self_links[0]["href"] == "https://bot.test/users/testbot"
+
+
+@pytest.mark.asyncio
+async def test_webfinger_returns_404_for_unknown_https_url(client):
+    response = await client.get(
+        "/.well-known/webfinger",
+        params={"resource": "https://bot.test/users/outro"},
+    )
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /users/{identifier}/notes/{note_id}
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_note_returns_200_for_stored_note(client):
+    from apkit.models import Note
+
+    from app.services import note_store
+
+    note = Note(
+        id="https://bot.test/users/testbot/notes/abc",
+        content="<p>test</p>",
+        attributed_to="https://bot.test/users/testbot",
+    )
+    note_store._notes["abc"] = note
+
+    response = await client.get("/users/testbot/notes/abc")
+    assert response.status_code == 200
+
+    note_store._notes.pop("abc", None)
+
+
+@pytest.mark.asyncio
+async def test_get_note_returns_404_for_missing_note(client):
+    response = await client.get("/users/testbot/notes/nao-existe")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_note_returns_404_for_unknown_user(client):
+    response = await client.get("/users/outrobot/notes/qualquer")
+    assert response.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # GET /nodeinfo/2.1
 # ---------------------------------------------------------------------------
