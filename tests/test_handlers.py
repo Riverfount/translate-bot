@@ -68,11 +68,12 @@ def _get_handlers():
 
 
 @pytest.mark.asyncio
-async def test_on_follow_with_actor_as_string_accepts_and_replies():
+async def test_on_follow_with_actor_as_string_accepts_and_replies(in_memory_db):
     from apkit.models import Actor as APKitActor
 
     mock_follower = MagicMock(spec=APKitActor)
     mock_follower.id = "https://mastodon.social/users/fulano"
+    mock_follower.inbox = "https://mastodon.social/users/fulano/inbox"
     ctx = _make_follow_ctx("https://mastodon.social/users/fulano")
 
     with patch("app.activitypub.handlers.ActivityPubClient") as mock_ap_client:
@@ -91,11 +92,12 @@ async def test_on_follow_with_actor_as_string_accepts_and_replies():
 
 
 @pytest.mark.asyncio
-async def test_on_follow_with_actor_as_object_skips_fetch():
+async def test_on_follow_with_actor_as_object_skips_fetch(in_memory_db):
     from apkit.models import Actor as APKitActor
 
     mock_follower = MagicMock(spec=APKitActor)
     mock_follower.id = "https://mastodon.social/users/fulano"
+    mock_follower.inbox = "https://mastodon.social/users/fulano/inbox"
     ctx = _make_follow_ctx(mock_follower)
 
     with patch("app.activitypub.handlers.ActivityPubClient") as mock_ap_client:
@@ -179,3 +181,143 @@ async def test_on_follow_returns_400_when_actor_is_unknown_type():
     ctx.send.assert_not_called()
     assert isinstance(response, JSONResponse)
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_on_follow_persists_follower_to_db(in_memory_db):
+    """on_follow deve salvar o follower no banco após aceitar."""
+    from apkit.models import Actor as APKitActor
+
+    from app.models.follower import Follower
+    from sqlalchemy import select
+
+    mock_follower = MagicMock(spec=APKitActor)
+    mock_follower.id = "https://mastodon.social/users/fulano"
+    mock_follower.inbox = "https://mastodon.social/users/fulano/inbox"
+    ctx = _make_follow_ctx(mock_follower)
+
+    handlers = _get_handlers()
+    await handlers["Follow"](ctx)
+
+    async with in_memory_db() as session:
+        result = await session.execute(select(Follower))
+        followers = result.scalars().all()
+
+    assert len(followers) == 1
+    assert followers[0].actor_url == "https://mastodon.social/users/fulano"
+    assert followers[0].inbox_url == "https://mastodon.social/users/fulano/inbox"
+
+
+@pytest.mark.asyncio
+async def test_on_follow_upserts_existing_follower(in_memory_db):
+    """Seguir duas vezes o mesmo actor não deve duplicar o registro."""
+    from apkit.models import Actor as APKitActor
+
+    from app.models.follower import Follower
+    from sqlalchemy import select
+
+    mock_follower = MagicMock(spec=APKitActor)
+    mock_follower.id = "https://mastodon.social/users/fulano"
+    mock_follower.inbox = "https://mastodon.social/users/fulano/inbox"
+    ctx = _make_follow_ctx(mock_follower)
+
+    handlers = _get_handlers()
+    await handlers["Follow"](ctx)
+    await handlers["Follow"](_make_follow_ctx(mock_follower))
+
+    async with in_memory_db() as session:
+        result = await session.execute(select(Follower))
+        followers = result.scalars().all()
+
+    assert len(followers) == 1
+
+
+@pytest.mark.asyncio
+async def test_on_undo_removes_follower_from_db(in_memory_db):
+    """on_undo com Undo{Follow} deve remover o follower do banco."""
+    from apkit.models import Follow, Undo
+
+    from app.models.follower import Follower
+    from sqlalchemy import select
+
+    # Semeia o banco com um follower
+    async with in_memory_db() as session:
+        async with session.begin():
+            session.add(
+                Follower(
+                    actor_url="https://mastodon.social/users/fulano",
+                    inbox_url="https://mastodon.social/users/fulano/inbox",
+                )
+            )
+
+    follow = Follow(
+        id="https://mastodon.social/users/fulano#follows/1",
+        actor="https://mastodon.social/users/fulano",
+        object="https://bot.test/users/testbot",
+    )
+    undo = Undo(
+        id="https://mastodon.social/users/fulano#undo/1",
+        actor="https://mastodon.social/users/fulano",
+        object=follow,
+    )
+    ctx = MagicMock()
+    ctx.activity = undo
+
+    handlers = _get_handlers()
+    response = await handlers["Undo"](ctx)
+
+    assert response.status_code == 202
+
+    async with in_memory_db() as session:
+        result = await session.execute(select(Follower))
+        followers = result.scalars().all()
+
+    assert followers == []
+
+
+@pytest.mark.asyncio
+async def test_on_undo_ignores_non_follow_activities(in_memory_db):
+    """on_undo com objeto que não é Follow deve retornar 202 sem alterar o banco."""
+    from apkit.models import Create, Note, Undo
+
+    from app.models.follower import Follower
+    from sqlalchemy import select
+
+    # Semeia um follower que não deve ser removido
+    async with in_memory_db() as session:
+        async with session.begin():
+            session.add(
+                Follower(
+                    actor_url="https://mastodon.social/users/fulano",
+                    inbox_url="https://mastodon.social/users/fulano/inbox",
+                )
+            )
+
+    note = Note(
+        id="https://mastodon.social/statuses/1",
+        attributed_to="https://mastodon.social/users/fulano",
+        content="<p>Olá</p>",
+    )
+    create = Create(
+        id="https://mastodon.social/statuses/1/activity",
+        actor="https://mastodon.social/users/fulano",
+        object=note,
+    )
+    undo = Undo(
+        id="https://mastodon.social/users/fulano#undo/2",
+        actor="https://mastodon.social/users/fulano",
+        object=create,
+    )
+    ctx = MagicMock()
+    ctx.activity = undo
+
+    handlers = _get_handlers()
+    response = await handlers["Undo"](ctx)
+
+    assert response.status_code == 202
+
+    async with in_memory_db() as session:
+        result = await session.execute(select(Follower))
+        followers = result.scalars().all()
+
+    assert len(followers) == 1

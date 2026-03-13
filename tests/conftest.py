@@ -2,9 +2,10 @@
 Fixtures compartilhadas entre todos os testes.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -138,6 +139,31 @@ def make_follow(remote_actor_url, bot_actor_url):
         )
 
     return _make
+
+
+@pytest_asyncio.fixture
+async def in_memory_db():
+    """
+    Banco SQLite em memória isolado por teste.
+    Patcha app.database.async_session_factory para que handlers e endpoints
+    usem este banco nos testes, sem tocar em arquivos em disco.
+    Retorna a fábrica de sessões para que os testes possam semear e verificar dados.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    import app.database
+    import app.models.follower  # noqa: F401 — registra o modelo no metadata
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(app.database.Base.metadata.create_all)
+
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+    with patch("app.database.async_session_factory", factory):
+        yield factory
+
+    await engine.dispose()
 
 
 @pytest.fixture
