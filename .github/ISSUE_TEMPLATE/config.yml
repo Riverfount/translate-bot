@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Dúvidas e discussões
+    url: https://github.com/Riverfount/translate-bot/discussions
+    about: Para perguntas gerais use as Discussions, não as Issues.
+  - name: Contato com o mantenedor
+    url: https://bolha.us/@riverfount
+    about: "@riverfount no Fediverso"
