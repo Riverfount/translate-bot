@@ -92,6 +92,7 @@ async def handle_create(activity: Create) -> None:
         f'<p><span class="h-card"><a href="{author_url}">@{author_username}</a></span> '
         f"🌐 <strong>[{source_lang} → {target_lang}]</strong><br>"
         f"{html.escape(translated)}</p>"
+        f"<p><small>Powered by libretranslate, fastapi, apkit, activitypub and bolhaverse/bolha.io</small></p>"
     )
 
     # IDs únicos
