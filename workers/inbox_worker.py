@@ -102,8 +102,8 @@ async def handle_create(activity: Create) -> None:
         id=note_id,
         attributed_to=bot_actor_url,
         content=reply_html,
-        to=[author_url],
-        cc=["https://www.w3.org/ns/activitystreams#Public"],
+        to=["https://www.w3.org/ns/activitystreams#Public"],
+        cc=[author_url],
         in_reply_to={"id": note.id, "type": "Note"},
         published=datetime.now(timezone.utc).isoformat(),
         tag=[
@@ -121,8 +121,8 @@ async def handle_create(activity: Create) -> None:
         id=create_id,
         actor=bot_actor_url,
         object=reply_note,
-        to=[author_url],
-        cc=["https://www.w3.org/ns/activitystreams#Public"],
+        to=["https://www.w3.org/ns/activitystreams#Public"],
+        cc=[author_url],
         published=datetime.now(timezone.utc).isoformat(),
     )
 
