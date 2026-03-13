@@ -180,8 +180,8 @@ async def test_handle_create_reply_has_correct_in_reply_to():
 
 
 @pytest.mark.asyncio
-async def test_handle_create_reply_addressed_to_author():
-    """Note de resposta tem o autor no campo 'to'."""
+async def test_handle_create_reply_is_public():
+    """Note de resposta é pública: #Public em 'to' e autor em 'cc'."""
     author_url = "https://mastodon.social/users/fulano"
     activity = _build_activity(_note_with_mention("Hello"), actor_url=author_url)
     remote_actor = _make_remote_actor(author_url)
@@ -204,7 +204,8 @@ async def test_handle_create_reply_addressed_to_author():
 
     mock_post_instance = mock_post_client.__aenter__.return_value
     sent_note = mock_post_instance.post.call_args.kwargs["json"].object
-    assert author_url in sent_note.to
+    assert "https://www.w3.org/ns/activitystreams#Public" in sent_note.to
+    assert author_url in sent_note.cc
 
 
 @pytest.mark.asyncio
