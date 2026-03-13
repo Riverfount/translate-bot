@@ -33,6 +33,7 @@ Testado e funcionando com [Mastodon](https://joinmastodon.org/) e instâncias co
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) instalado
+- [make](https://www.gnu.org/software/make/) instalado (disponível na maioria dos sistemas Unix)
 - Acesso a uma instância [LibreTranslate](https://libretranslate.com/) (pública ou self-hosted)
 - Um domínio com HTTPS apontando para o servidor (obrigatório para ActivityPub)
 
@@ -56,7 +57,7 @@ cd translate-bot
 ### 3. Instalar as dependências
 
 ```bash
-uv sync
+make install-dev
 ```
 
 O uv cria automaticamente o ambiente virtual em `.venv` e instala tudo a partir do `uv.lock`. Não é necessário ativar o venv manualmente.
@@ -64,7 +65,7 @@ O uv cria automaticamente o ambiente virtual em `.venv` e instala tudo a partir 
 ### 4. Gerar as chaves RSA do bot
 
 ```bash
-uv run python scripts/generate_keys.py
+make gen-keys
 ```
 
 Isso cria `keys/private.pem` e `keys/public.pem`. A chave privada é usada para assinar as atividades enviadas — **nunca a versione no git**.
@@ -96,13 +97,13 @@ ENV_FOR_DYNACONF=production
 ### 6. Rodar o servidor
 
 ```bash
-uv run uvicorn app.main:api --host 0.0.0.0 --port 8000
+make run
 ```
 
 Para desenvolvimento com hot-reload:
 
 ```bash
-uv run uvicorn app.main:api --host 0.0.0.0 --port 8000 --reload
+make dev
 ```
 
 ---
@@ -194,6 +195,7 @@ translate-bot/
 ├── .secrets.toml                # Segredos — git-ignored
 ├── .env.example                 # Exemplo de variáveis de ambiente
 ├── Dockerfile                   # Imagem para deploy
+├── Makefile                     # Comandos de gerenciamento do projeto
 ├── pyproject.toml               # Dependências e metadados
 └── uv.lock                      # Lockfile — deve ser versionado
 ```
@@ -204,10 +206,16 @@ translate-bot/
 
 ```bash
 # Rodar todos os testes (cobertura incluída automaticamente)
-uv run pytest
+make test
+
+# Modo verbose
+make test-v
 
 # Apenas um módulo
-uv run pytest tests/test_handlers.py -v
+make test-file FILE=tests/test_handlers.py
+
+# Sem relatório de cobertura (mais rápido)
+make test-fast
 ```
 
 A cobertura é configurada automaticamente via `pyproject.toml` (branch coverage). A suite cobre translate, inbox_worker, handlers, actor/keys e os endpoints principais do servidor.
@@ -217,11 +225,26 @@ A cobertura é configurada automaticamente via `pyproject.toml` (branch coverage
 ## Comandos úteis
 
 ```bash
+# Listar todos os comandos disponíveis
+make help
+
 # Verificar o código com o linter
-uv run ruff check .
+make lint
+
+# Corrigir erros de lint automaticamente
+make lint-fix
 
 # Formatar o código
-uv run ruff format .
+make format
+
+# Verificar tipos com mypy
+make typecheck
+
+# Formatar + lint + typecheck de uma vez
+make check
+
+# Remover artefatos gerados (cache, cobertura, build)
+make clean
 
 # Adicionar uma dependência
 uv add nome-do-pacote
@@ -238,15 +261,27 @@ uv lock --upgrade-package apkit
 ## Deploy com Docker
 
 ```bash
-docker build -t translate-bot .
-docker run -d \
-  -p 8000:8000 \
-  -v $(pwd)/keys:/app/keys \
-  -v $(pwd)/bot.db:/app/bot.db \
-  -e ENV_FOR_DYNACONF=production \
-  -e TRANSLATEBOT_LIBRETRANSLATE_URL=https://libretranslate.com \
-  -e TRANSLATEBOT_LIBRETRANSLATE_API_KEY=sua-chave-aqui \
-  translate-bot
+make docker-build
+make docker-run
+```
+
+Para acompanhar os logs em tempo real:
+
+```bash
+make docker-logs
+```
+
+Para parar e remover o container:
+
+```bash
+make docker-stop
+```
+
+As variáveis `IMAGE_NAME`, `IMAGE_TAG` e `PORT` podem ser sobrescritas:
+
+```bash
+make docker-build IMAGE_NAME=meu-bot IMAGE_TAG=v1.0
+make docker-run PORT=9000
 ```
 
 ---
@@ -281,7 +316,7 @@ Para testar sem um servidor público, use o [ngrok](https://ngrok.com/) para exp
 ngrok http 8000
 
 # Terminal 2 — servidor
-uv run uvicorn app.main:api --host 0.0.0.0 --port 8000 --reload
+make dev
 ```
 
 Atualize o `settings.toml` com a URL do ngrok na seção `[development]` e defina `ENV_FOR_DYNACONF=development` no `.env`.
