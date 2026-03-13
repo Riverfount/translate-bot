@@ -34,7 +34,7 @@ from httpx import ASGITransport, AsyncClient
 
 
 @pytest_asyncio.fixture
-async def client():
+async def client(in_memory_db):
     with (
         patch("app.database.init_db", AsyncMock()),
         patch("workers.inbox_worker.run_worker", AsyncMock()),
@@ -152,6 +152,56 @@ async def test_get_followers_body_has_context(client):
 async def test_get_followers_returns_404_for_unknown_user(client):
     response = await client.get("/users/outrobot/followers")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_followers_returns_empty_when_no_followers(client):
+    response = await client.get("/users/testbot/followers")
+    data = response.json()
+    assert data["totalItems"] == 0
+    assert data["orderedItems"] == []
+
+
+@pytest.mark.asyncio
+async def test_get_followers_returns_real_count(client, in_memory_db):
+    from app.models.follower import Follower
+
+    async with in_memory_db() as session:
+        async with session.begin():
+            session.add(
+                Follower(
+                    actor_url="https://mastodon.social/users/fulano",
+                    inbox_url="https://mastodon.social/users/fulano/inbox",
+                )
+            )
+            session.add(
+                Follower(
+                    actor_url="https://social.coop/users/beltrano",
+                    inbox_url="https://social.coop/users/beltrano/inbox",
+                )
+            )
+
+    response = await client.get("/users/testbot/followers")
+    data = response.json()
+    assert data["totalItems"] == 2
+
+
+@pytest.mark.asyncio
+async def test_get_followers_returns_actor_urls(client, in_memory_db):
+    from app.models.follower import Follower
+
+    async with in_memory_db() as session:
+        async with session.begin():
+            session.add(
+                Follower(
+                    actor_url="https://mastodon.social/users/fulano",
+                    inbox_url="https://mastodon.social/users/fulano/inbox",
+                )
+            )
+
+    response = await client.get("/users/testbot/followers")
+    data = response.json()
+    assert "https://mastodon.social/users/fulano" in data["orderedItems"]
 
 
 # ---------------------------------------------------------------------------

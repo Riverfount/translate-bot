@@ -15,9 +15,13 @@ from apkit.server.responses import ActivityResponse
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
+from sqlalchemy import select
+
+from app import database as _db
 from app.activitypub.actor import build_actor
 from app.activitypub.handlers import register_handlers
 from app.config import settings
+from app.models.follower import Follower
 from app.services.note_store import get_note
 
 logging.basicConfig(level=logging.INFO)
@@ -89,13 +93,16 @@ async def nodeinfo():
 async def get_followers(identifier: str):
     if identifier != settings.bot_username:
         return JSONResponse({"error": "Not found"}, status_code=404)
+    async with _db.async_session_factory() as session:
+        result = await session.execute(select(Follower))
+        followers = result.scalars().all()
     return JSONResponse(
         {
             "@context": "https://www.w3.org/ns/activitystreams",
             "id": f"https://{settings.domain}/users/{identifier}/followers",
             "type": "OrderedCollection",
-            "totalItems": 0,
-            "orderedItems": [],
+            "totalItems": len(followers),
+            "orderedItems": [f.actor_url for f in followers],
         },
         media_type="application/activity+json",
     )
