@@ -68,7 +68,7 @@ def _get_handlers():
 
 
 @pytest.mark.asyncio
-async def test_on_follow_with_actor_as_string_accepts_and_replies():
+async def test_on_follow_with_actor_as_string_accepts_and_replies(in_memory_db):
     from apkit.models import Actor as APKitActor
 
     mock_follower = MagicMock(spec=APKitActor)
@@ -92,7 +92,7 @@ async def test_on_follow_with_actor_as_string_accepts_and_replies():
 
 
 @pytest.mark.asyncio
-async def test_on_follow_with_actor_as_object_skips_fetch():
+async def test_on_follow_with_actor_as_object_skips_fetch(in_memory_db):
     from apkit.models import Actor as APKitActor
 
     mock_follower = MagicMock(spec=APKitActor)
