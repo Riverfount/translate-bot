@@ -1,8 +1,8 @@
 [project]
 name        = "translate-bot"
-version     = "1.0.0"
+version     = "1.1.0"
 description = "ActivityPub translation bot powered by apkit"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 
 dependencies = [
     "apkit[server]>=0.3.8,<0.4",  # fixar minor — API ainda instável
@@ -38,10 +38,10 @@ package = true
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = true
 
 # apkit e FastAPI decoram funções (@app.get, @app.on(...), etc.) com decorators

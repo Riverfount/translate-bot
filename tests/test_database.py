@@ -151,7 +151,7 @@ async def test_get_session_rollback_on_exception(test_engine, test_session_facto
             )
             session.add(follower)
             await gen.athrow(RuntimeError("erro simulado"))
-        except (RuntimeError, StopAsyncIteration):
+        except RuntimeError, StopAsyncIteration:
             pass
 
     # Verifica que o dado NÃO foi persistido
