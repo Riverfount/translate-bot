@@ -6,11 +6,15 @@ Worker assíncrono que processa atividades Create recebidas no inbox do bot.
 Fluxo:
 1. No startup, recarrega itens pendentes de uma execução anterior (load_pending)
 2. Consome atividades da fila (activity_queue)
-3. Verifica se o bot foi mencionado no post
-4. Extrai o texto puro removendo tags HTML
-5. Traduz via LibreTranslate
-6. Monta um Note de resposta e entrega no inbox do autor
-7. Remove a atividade da persistência (dequeue) só após sucesso —
+3. Ignora a atividade se activity.id já foi processado (reentrega do
+   Mastodon após uma resposta já enviada com sucesso)
+4. Verifica se o bot foi mencionado no post
+5. Extrai o texto puro removendo tags HTML
+6. Traduz via LibreTranslate
+7. Monta um Note de resposta e entrega no inbox do autor
+8. Marca a atividade como processada (mark_processed) só após entrega
+   bem-sucedida — erro não marca, permitindo retry legítimo na reentrega
+9. Remove a atividade da persistência (dequeue) só após sucesso —
    erro mantém o item para retry no próximo restart do processo
 """
 
@@ -29,6 +33,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa as rsa_module
 
 from app.activitypub.keys import get_bot_keys
 from app.config import settings
+from app.services.dedup import already_processed, mark_processed
 from app.services.note_store import store_note
 from app.services.queue import activity_queue, dequeue, load_pending
 from app.services.translate import translate_text
@@ -39,6 +44,10 @@ MAX_TRANSLATE_CHARS = 500
 
 
 async def handle_create(activity: Create) -> None:
+    if await already_processed(activity.id):
+        log.info(f"Activity já processada anteriormente, ignorando: {activity.id}")
+        return
+
     note = activity.object
 
     log.info(
@@ -156,6 +165,7 @@ async def handle_create(activity: Create) -> None:
                 body = await response.text()
                 log.info(f"Status: {response.status} — Resposta: {body[:500]}")
         log.info(f"Tradução [{source_lang}→{target_lang}] enviada para {author_url}")
+        await mark_processed(activity.id)
     except Exception as e:
         log.error(f"Erro ao entregar resposta para {author_url}: {e}", exc_info=True)
 
