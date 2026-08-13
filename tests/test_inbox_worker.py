@@ -60,6 +60,30 @@ def mock_dequeue():
 
 
 # ---------------------------------------------------------------------------
+# Deduplicação de atividades (issue #13) — mockadas aqui porque estes são
+# testes unitários do worker, não da persistência (ver test_dedup.py).
+# already_processed default False: por padrão, os testes exercitam o
+# caminho normal (atividade nova, ainda não vista).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def mock_already_processed():
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "already_processed", AsyncMock(return_value=False)) as mock:
+        yield mock
+
+
+@pytest.fixture(autouse=True)
+def mock_mark_processed():
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "mark_processed", AsyncMock()) as mock:
+        yield mock
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -367,6 +391,7 @@ async def test_handle_create_ignores_non_note_object():
     non_note.__class__ = object
 
     activity = MagicMock(spec=Create)
+    activity.id = "https://mastodon.social/statuses/1/activity"
     activity.actor = "https://mastodon.social/users/fulano"
     activity.object = non_note
 
@@ -406,6 +431,72 @@ async def test_handle_create_logs_error_on_send_failure():
 
     mock_log.error.assert_called_once()
     assert "connection refused" in str(mock_log.error.call_args)
+
+
+@pytest.mark.asyncio
+async def test_handle_create_skips_when_already_processed(mock_already_processed):
+    """Se activity.id já foi processado (reentrega), handle_create não traduz nem responde."""
+    activity = _build_activity(_note_with_mention("Bonjour"))
+    mock_already_processed.return_value = True
+
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "translate_text") as mock_translate:
+        await worker_module.handle_create(activity)
+
+    mock_already_processed.assert_awaited_once_with(activity.id)
+    mock_translate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_create_marks_processed_after_successful_delivery(mock_mark_processed):
+    """Após entregar a resposta com sucesso, a atividade é marcada como processada."""
+    activity = _build_activity(_note_with_mention("Bonjour"))
+    remote_actor = _make_remote_actor()
+    mock_fetch_client, mock_post_client = _mock_ap_client(remote_actor)
+
+    import workers.inbox_worker as worker_module
+
+    with (
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "fr"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
+    ):
+        await worker_module.handle_create(activity)
+
+    mock_mark_processed.assert_awaited_once_with(activity.id)
+
+
+@pytest.mark.asyncio
+async def test_handle_create_does_not_mark_processed_when_delivery_fails(mock_mark_processed):
+    """Se a entrega falhar, a atividade NÃO é marcada — permite retry legítimo na reentrega."""
+    activity = _build_activity(_note_with_mention("Bonjour"))
+    remote_actor = _make_remote_actor()
+    mock_fetch_client, mock_post_client = _mock_ap_client(remote_actor)
+    mock_post_client.__aenter__.return_value.post.side_effect = Exception("connection refused")
+
+    import workers.inbox_worker as worker_module
+
+    with (
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "fr"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
+    ):
+        await worker_module.handle_create(activity)
+
+    mock_mark_processed.assert_not_called()
 
 
 @pytest.mark.asyncio
