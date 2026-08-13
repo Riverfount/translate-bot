@@ -6,6 +6,8 @@ GET /users/{identifier}/notes/{note_id} continue resolvendo o objeto
 mesmo depois de um restart do processo.
 """
 
+from typing import Any
+
 import apmodel
 from apkit.models import Note
 
@@ -20,7 +22,7 @@ async def store_note(note_id: str, note: Note) -> None:
             await session.merge(StoredNote(note_id=note_id, content=content))
 
 
-async def get_note(note_id: str) -> dict | None:
+async def get_note(note_id: str) -> dict[str, Any] | None:
     async with _db.async_session_factory() as session:
         stored = await session.get(StoredNote, note_id)
     return stored.content if stored else None

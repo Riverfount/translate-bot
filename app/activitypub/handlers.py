@@ -13,6 +13,7 @@ import logging
 
 from apkit.client.asyncio.client import ActivityPubClient
 from apkit.models import Accept, Actor as APKitActor, Create, Follow, Undo
+from apkit.server.app import ActivityPubServer
 from apkit.server.types import Context
 from fastapi import Response
 from fastapi.responses import JSONResponse
@@ -27,14 +28,14 @@ from app.services import queue as queue_module
 log = logging.getLogger(__name__)
 
 
-def register_handlers(app) -> None:
+def register_handlers(app: ActivityPubServer) -> None:
     """
     Registra os handlers de atividades no servidor apkit.
     Chamado em main.py após criar a instância ActivityPubServer.
     """
 
     @app.on(Follow)
-    async def on_follow(ctx: Context):
+    async def on_follow(ctx: Context) -> Response:
         """
         Aceita automaticamente qualquer Follow recebido.
         Resolve o actor remoto, constrói o Accept, envia assinado e persiste o follower.
@@ -73,7 +74,7 @@ def register_handlers(app) -> None:
         return Response(status_code=202)
 
     @app.on(Undo)
-    async def on_undo(ctx: Context):
+    async def on_undo(ctx: Context) -> Response:
         """
         Processa Undo{Follow}: remove o follower do banco.
         Outros tipos de Undo são ignorados silenciosamente.
@@ -105,7 +106,7 @@ def register_handlers(app) -> None:
         return Response(status_code=202)
 
     @app.on(Create)
-    async def on_create(ctx: Context):
+    async def on_create(ctx: Context) -> Response:
         """
         Enfileira a atividade para o worker assíncrono e retorna 202 imediatamente.
         Mastodon tem timeout curto — nunca bloquear no handler.

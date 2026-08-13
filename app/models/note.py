@@ -9,6 +9,7 @@ continue resolvendo o objeto após um restart do processo.
 """
 
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import JSON, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -23,7 +24,7 @@ class StoredNote(Base):
     note_id: Mapped[str] = mapped_column(String(2048), primary_key=True)
 
     # Payload ActivityPub já serializado (apmodel.to_dict), pronto para responder
-    content: Mapped[dict] = mapped_column(JSON)
+    content: Mapped[dict[str, Any]] = mapped_column(JSON)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
