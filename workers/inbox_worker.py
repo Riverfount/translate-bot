@@ -11,12 +11,14 @@ Fluxo:
 4. Verifica se o bot foi mencionado via a tag Mention estruturada do Note
    (não por substring no HTML — ver _mentions_bot)
 5. Extrai o texto puro removendo tags HTML
-6. Traduz via LibreTranslate
-7. Monta um Note de resposta e entrega no inbox do autor
-8. Marca a atividade como processada (mark_processed) só após entrega
+6. Ignora a menção se o autor está em cooldown (rate limit por ator —
+   evita spam público e consumo sem limite da API de tradução)
+7. Traduz via LibreTranslate
+8. Monta um Note de resposta e entrega no inbox do autor
+9. Marca a atividade como processada (mark_processed) só após entrega
    bem-sucedida — erro não marca, permitindo retry legítimo na reentrega
-9. Remove a atividade da persistência (dequeue) só após sucesso —
-   erro mantém o item para retry no próximo restart do processo
+10. Remove a atividade da persistência (dequeue) só após sucesso —
+    erro mantém o item para retry no próximo restart do processo
 """
 
 import asyncio
@@ -38,6 +40,7 @@ from app.config import settings
 from app.services.dedup import already_processed, mark_processed
 from app.services.note_store import store_note
 from app.services.queue import activity_queue, dequeue, load_pending
+from app.services.rate_limit import is_rate_limited, record_request
 from app.services.translate import translate_text
 
 log = logging.getLogger(__name__)
@@ -88,6 +91,16 @@ async def handle_create(activity: Create) -> None:
     if not _mentions_bot(note.tag, bot_actor_url):
         return
 
+    # Dados do autor — extraídos cedo para permitir checar o rate limit
+    # antes de gastar uma chamada à API de tradução
+    author_url = activity.actor if isinstance(activity.actor, str) else activity.actor.id
+    parsed_author = urlparse(author_url)
+    if not parsed_author.scheme or not parsed_author.netloc:
+        log.error(f"URL de actor inválida: {author_url!r}")
+        return
+    author_domain = parsed_author.netloc
+    author_username = parsed_author.path.rstrip("/").split("/")[-1]
+
     # Extrai texto puro removendo a menção ao bot
     soup = BeautifulSoup(content_html, "html.parser")
     for tag in soup.find_all("span", {"class": "mention"}):
@@ -96,6 +109,11 @@ async def handle_create(activity: Create) -> None:
 
     if not plain_text:
         return
+
+    if await is_rate_limited(author_url):
+        log.info(f"Rate limit: ignorando menção de {author_url} (cooldown ativo)")
+        return
+    await record_request(author_url)
 
     if len(plain_text) > MAX_TRANSLATE_CHARS:
         log.warning(f"Texto truncado de {len(plain_text)} para {MAX_TRANSLATE_CHARS} caracteres")
@@ -106,15 +124,6 @@ async def handle_create(activity: Create) -> None:
     translated = result["translated"]
     source_lang = result["detected_source"].upper()
     target_lang = settings.target_language.upper()
-
-    # Dados do autor
-    author_url = activity.actor if isinstance(activity.actor, str) else activity.actor.id
-    parsed_author = urlparse(author_url)
-    if not parsed_author.scheme or not parsed_author.netloc:
-        log.error(f"URL de actor inválida: {author_url!r}")
-        return
-    author_domain = parsed_author.netloc
-    author_username = parsed_author.path.rstrip("/").split("/")[-1]
 
     # Busca o actor remoto
     try:
