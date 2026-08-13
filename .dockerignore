@@ -1,0 +1,29 @@
+# Sem isso, `COPY . .` no Dockerfile inclui tudo isto na imagem — incluindo
+# a chave privada em keys/ e segredos em .env/.secrets.toml, que ficariam
+# gravados permanentemente nas camadas da imagem.
+
+.git/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.egg-info/
+.idea/
+
+# Segredos — nunca devem entrar na imagem. Em runtime, keys/ é montado como
+# volume (ver Makefile: docker-run) e os segredos vêm de env vars/secrets.toml
+# fornecidos no host.
+.env
+.secrets.toml
+keys/
+
+# Bancos de dados locais — em runtime, bot.db é montado como volume
+*.db
+
+Dockerfile
+README.md
