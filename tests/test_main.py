@@ -361,19 +361,35 @@ async def test_webfinger_returns_404_for_unknown_https_url(client):
 async def test_get_note_returns_200_for_stored_note(client):
     from apkit.models import Note
 
-    from app.services import note_store
+    from app.services.note_store import store_note
 
     note = Note(
         id="https://bot.test/users/testbot/notes/abc",
         content="<p>test</p>",
         attributed_to="https://bot.test/users/testbot",
     )
-    note_store._notes["abc"] = note
+    await store_note("https://bot.test/users/testbot/notes/abc", note)
 
     response = await client.get("/users/testbot/notes/abc")
     assert response.status_code == 200
 
-    note_store._notes.pop("abc", None)
+
+@pytest.mark.asyncio
+async def test_get_note_body_matches_stored_content(client):
+    from apkit.models import Note
+
+    from app.services.note_store import store_note
+
+    note = Note(
+        id="https://bot.test/users/testbot/notes/abc",
+        content="<p>conteúdo da nota</p>",
+        attributed_to="https://bot.test/users/testbot",
+    )
+    await store_note("https://bot.test/users/testbot/notes/abc", note)
+
+    response = await client.get("/users/testbot/notes/abc")
+    data = response.json()
+    assert data["content"] == "<p>conteúdo da nota</p>"
 
 
 @pytest.mark.asyncio
@@ -386,6 +402,30 @@ async def test_get_note_returns_404_for_missing_note(client):
 async def test_get_note_returns_404_for_unknown_user(client):
     response = await client.get("/users/outrobot/notes/qualquer")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_note_survives_process_restart_simulation(client):
+    """
+    Regressão: a nota deve ser resolvível mesmo se o processo reiniciar
+    (aqui simulado apenas reabrindo o banco — não há mais estado em memória
+    a ser perdido, diferente da implementação anterior com dict).
+    """
+    from apkit.models import Note
+
+    from app.services.note_store import store_note
+
+    note = Note(
+        id="https://bot.test/users/testbot/notes/xyz",
+        content="<p>sobrevive ao restart</p>",
+        attributed_to="https://bot.test/users/testbot",
+    )
+    await store_note("https://bot.test/users/testbot/notes/xyz", note)
+
+    # Uma nova consulta, como se fosse um novo request após restart do processo
+    response = await client.get("/users/testbot/notes/xyz")
+    assert response.status_code == 200
+    assert response.json()["content"] == "<p>sobrevive ao restart</p>"
 
 
 # ---------------------------------------------------------------------------
