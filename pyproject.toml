@@ -44,6 +44,17 @@ target-version = "py312"
 python_version = "3.12"
 strict = true
 
+# apkit e FastAPI decoram funções (@app.get, @app.on(...), etc.) com decorators
+# vindos de libs sem stubs — sob strict isso marcaria toda rota como untyped
+# mesmo com a função já totalmente anotada. Exceção padrão para esse padrão.
+disallow_untyped_decorators = false
+
+# apkit, apmodel e dynaconf não publicam stubs nem py.typed —
+# sem isso, mypy pula a análise de qualquer import dessas libs.
+[[tool.mypy.overrides]]
+module = ["apkit.*", "apmodel", "apmodel.*", "dynaconf.*"]
+ignore_missing_imports = true
+
 [tool.setuptools.packages.find]
 include = ["app*", "workers*"]
 exclude = ["keys*", "scripts*", "tests*"]

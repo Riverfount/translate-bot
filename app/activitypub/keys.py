@@ -1,9 +1,10 @@
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 from apkit.server.types import ActorKey
 from app.config import settings
 
 
-def load_private_key():
+def load_private_key() -> PrivateKeyTypes:
     with open(settings.private_key_path, "rb") as f:
         return serialization.load_pem_private_key(f.read(), password=None)
 

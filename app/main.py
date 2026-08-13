@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from typing import AsyncIterator, cast
 
 from apkit.client import WebfingerLink, WebfingerResource, WebfingerResult
 from apkit.models import (
@@ -12,7 +13,7 @@ from apkit.models import (
 )
 from apkit.server.app import ActivityPubServer
 from apkit.server.responses import ActivityResponse
-from fastapi import Request, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 from sqlalchemy import select
@@ -30,7 +31,7 @@ actor = build_actor()
 
 
 @asynccontextmanager
-async def lifespan(app):
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     import app.database
     import workers.inbox_worker
 
@@ -50,9 +51,9 @@ api.inbox("/users/{identifier}/inbox")
 
 
 @api.get("/users/{identifier}")
-async def get_actor(identifier: str):
+async def get_actor(identifier: str) -> Response:
     if identifier == settings.bot_username:
-        return ActivityResponse(actor)
+        return cast(Response, ActivityResponse(actor))
     return JSONResponse({"error": "Not found"}, status_code=404)
 
 
@@ -75,22 +76,25 @@ async def webfinger(request: Request, acct: WebfingerResource) -> Response:
 
 
 @api.nodeinfo("/nodeinfo/2.1", "2.1")
-async def nodeinfo():
-    return ActivityResponse(
-        Nodeinfo(
-            version="2.1",
-            software=NodeinfoSoftware(name="translate-bot", version="1.0.0"),
-            protocols=["activitypub"],
-            services=NodeinfoServices(inbound=[], outbound=[]),
-            openRegistrations=False,
-            usage=NodeinfoUsage(users=NodeinfoUsageUsers(total=1)),
-            metadata={},
-        )
+async def nodeinfo() -> Response:
+    return cast(
+        Response,
+        ActivityResponse(
+            Nodeinfo(
+                version="2.1",
+                software=NodeinfoSoftware(name="translate-bot", version="1.0.0"),
+                protocols=["activitypub"],
+                services=NodeinfoServices(inbound=[], outbound=[]),
+                openRegistrations=False,
+                usage=NodeinfoUsage(users=NodeinfoUsageUsers(total=1)),
+                metadata={},
+            )
+        ),
     )
 
 
 @api.get("/users/{identifier}/followers")
-async def get_followers(identifier: str):
+async def get_followers(identifier: str) -> Response:
     if identifier != settings.bot_username:
         return JSONResponse({"error": "Not found"}, status_code=404)
     async with _db.async_session_factory() as session:
@@ -109,7 +113,7 @@ async def get_followers(identifier: str):
 
 
 @api.get("/users/{identifier}/outbox")
-async def get_outbox(identifier: str):
+async def get_outbox(identifier: str) -> Response:
     if identifier != settings.bot_username:
         return JSONResponse({"error": "Not found"}, status_code=404)
     return JSONResponse(
@@ -125,7 +129,7 @@ async def get_outbox(identifier: str):
 
 
 @api.get("/users/{identifier}/notes/{note_id}")
-async def get_note_endpoint(identifier: str, note_id: str):
+async def get_note_endpoint(identifier: str, note_id: str) -> Response:
     if identifier != settings.bot_username:
         return JSONResponse({"error": "Not found"}, status_code=404)
     # note_id no path é apenas o último segmento — a chave usada no store é a
@@ -138,5 +142,5 @@ async def get_note_endpoint(identifier: str, note_id: str):
 
 
 @api.get("/health")
-async def health():
+async def health() -> dict[str, str]:
     return {"status": "ok"}

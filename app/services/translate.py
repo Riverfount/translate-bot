@@ -2,7 +2,7 @@ import httpx
 from app.config import settings
 
 
-async def translate_text(text: str, target: str | None = None) -> dict:
+async def translate_text(text: str, target: str | None = None) -> dict[str, str]:
     """Traduz texto usando LibreTranslate."""
     target = target or settings.target_language
 
