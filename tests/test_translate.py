@@ -153,6 +153,53 @@ async def test_translate_uses_libretranslate_url():
 
 
 @pytest.mark.asyncio
+async def test_translate_does_not_duplicate_translate_suffix(monkeypatch):
+    """
+    Se libretranslate_url já vier com /translate no final (erro comum de
+    config — issue #34), não deve duplicar o sufixo na URL final.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "libretranslate_url", "http://libretranslate.test/translate")
+
+    mock_resp = _mock_response(translated="X", detected="en")
+
+    with patch("app.services.translate.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_client_cls.return_value = mock_client
+
+        await translate_text("test")
+
+        url, _ = mock_client.post.call_args
+        assert url[0] == "http://libretranslate.test/translate"
+
+
+@pytest.mark.asyncio
+async def test_translate_strips_trailing_slash_from_url(monkeypatch):
+    """URL configurada com barra final não deve gerar // antes de /translate."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "libretranslate_url", "http://libretranslate.test/")
+
+    mock_resp = _mock_response(translated="X", detected="en")
+
+    with patch("app.services.translate.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_client_cls.return_value = mock_client
+
+        await translate_text("test")
+
+        url, _ = mock_client.post.call_args
+        assert url[0] == "http://libretranslate.test/translate"
+
+
+@pytest.mark.asyncio
 async def test_translate_detected_source_fallback():
     """Se a API não retornar `detectedLanguage`, deve usar '?' como fallback."""
     mock = MagicMock(spec=httpx.Response)
