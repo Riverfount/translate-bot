@@ -128,10 +128,13 @@ async def get_outbox(identifier: str):
 async def get_note_endpoint(identifier: str, note_id: str):
     if identifier != settings.bot_username:
         return JSONResponse({"error": "Not found"}, status_code=404)
-    note = get_note(note_id)
+    # note_id no path é apenas o último segmento — a chave usada no store é a
+    # URL completa (o próprio id ActivityPub da nota), então reconstruímos aqui.
+    full_note_id = f"https://{settings.domain}/users/{identifier}/notes/{note_id}"
+    note = await get_note(full_note_id)
     if note is None:
         return JSONResponse({"error": "Not found"}, status_code=404)
-    return ActivityResponse(note)
+    return JSONResponse(note, media_type="application/activity+json; charset=utf-8")
 
 
 @api.get("/health")

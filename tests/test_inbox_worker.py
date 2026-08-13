@@ -23,6 +23,20 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 
 # ---------------------------------------------------------------------------
+# store_note é persistido em banco (issue #11) — mockado aqui porque estes
+# são testes unitários do worker, não da persistência (ver test_note_store.py).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def mock_store_note():
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "store_note", AsyncMock()) as mock:
+        yield mock
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -143,6 +157,34 @@ async def test_handle_create_translates_and_calls_client_post():
     assert "Olá a todos" in sent_activity.object.content
     assert "FR" in sent_activity.object.content
     assert "PT" in sent_activity.object.content
+
+
+@pytest.mark.asyncio
+async def test_handle_create_awaits_store_note_with_reply_note(mock_store_note):
+    """store_note (persistência em banco, issue #11) é chamado com o note_id e a Note de resposta."""
+    activity = _build_activity(_note_with_mention("Bonjour"))
+    remote_actor = _make_remote_actor()
+    mock_fetch_client, mock_post_client = _mock_ap_client(remote_actor)
+
+    import workers.inbox_worker as worker_module
+
+    with (
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "fr"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
+    ):
+        await worker_module.handle_create(activity)
+
+    mock_store_note.assert_awaited_once()
+    stored_note_id, stored_note = mock_store_note.call_args.args
+    assert stored_note_id == stored_note.id
+    assert isinstance(stored_note, Note)
 
 
 @pytest.mark.asyncio

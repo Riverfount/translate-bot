@@ -1,13 +1,26 @@
-from typing import Dict
+"""
+app/services/note_store.py
 
+Persiste as notas de resposta publicadas pelo bot em SQLite, para que
+GET /users/{identifier}/notes/{note_id} continue resolvendo o objeto
+mesmo depois de um restart do processo.
+"""
+
+import apmodel
 from apkit.models import Note
 
-_notes: Dict[str, Note] = {}
+from app import database as _db
+from app.models.note import StoredNote
 
 
-def store_note(note_id: str, note: Note) -> None:
-    _notes[note_id] = note
+async def store_note(note_id: str, note: Note) -> None:
+    content = apmodel.to_dict(note)
+    async with _db.async_session_factory() as session:
+        async with session.begin():
+            await session.merge(StoredNote(note_id=note_id, content=content))
 
 
-def get_note(note_id: str) -> Note | None:
-    return _notes.get(note_id)
+async def get_note(note_id: str) -> dict | None:
+    async with _db.async_session_factory() as session:
+        stored = await session.get(StoredNote, note_id)
+    return stored.content if stored else None

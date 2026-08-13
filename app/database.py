@@ -80,7 +80,7 @@ async def init_db() -> None:
     """
     # Importa os modelos para que o SQLAlchemy os registre no metadata da Base
     # antes de criar as tabelas. Sem este import, as tabelas não serão criadas.
-    from app.models import follower  # noqa: F401
+    from app.models import follower, note  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

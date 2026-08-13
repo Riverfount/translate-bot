@@ -116,7 +116,7 @@ async def handle_create(activity: Create) -> None:
         ],
     )
 
-    store_note(note_id, reply_note)
+    await store_note(note_id, reply_note)
 
     reply_create = Create(
         id=create_id,
