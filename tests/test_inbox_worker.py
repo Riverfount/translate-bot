@@ -118,6 +118,7 @@ def _note_with_mention(extra_text: str = "Bonjour tout le monde") -> Note:
             '<a href="https://bot.test/users/testbot">@testbot</a>'
             f"</span> {extra_text}</p>"
         ),
+        tag=[{"type": "Mention", "href": "https://bot.test/users/testbot", "name": "@testbot"}],
         to=["https://www.w3.org/ns/activitystreams#Public"],
     )
 
@@ -242,6 +243,7 @@ async def test_handle_create_reply_has_correct_in_reply_to():
         id=original_id,
         attributed_to="https://mastodon.social/users/fulano",
         content='<p><span class="mention"><a href="https://bot.test/users/testbot">@testbot</a></span> Hello</p>',
+        tag=[{"type": "Mention", "href": "https://bot.test/users/testbot", "name": "@testbot"}],
         to=["https://www.w3.org/ns/activitystreams#Public"],
     )
     activity = _build_activity(note)
@@ -373,6 +375,7 @@ async def test_handle_create_ignores_empty_text_after_stripping_mention():
         id="https://mastodon.social/statuses/3",
         attributed_to="https://mastodon.social/users/fulano",
         content='<p><span class="mention"><a href="https://bot.test/users/testbot">@testbot</a></span></p>',
+        tag=[{"type": "Mention", "href": "https://bot.test/users/testbot", "name": "@testbot"}],
         to=["https://www.w3.org/ns/activitystreams#Public"],
     )
     activity = _build_activity(note)
@@ -383,6 +386,120 @@ async def test_handle_create_ignores_empty_text_after_stripping_mention():
         await worker_module.handle_create(activity)
 
     mock_translate.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Detecção de menção via tag Mention estruturada, não substring no HTML
+# (issue #14)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_handle_create_ignores_bot_url_in_content_without_mention_tag():
+    """
+    Falso positivo da lógica antiga: a URL do bot aparece no texto (ex: um
+    link citado), mas não há tag Mention real apontando pra ela — não deve
+    responder.
+    """
+    note = Note(
+        id="https://mastodon.social/statuses/50",
+        attributed_to="https://mastodon.social/users/fulano",
+        content="<p>Olha esse bot legal: https://bot.test/users/testbot</p>",
+        to=["https://www.w3.org/ns/activitystreams#Public"],
+    )
+    activity = _build_activity(note)
+
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "translate_text") as mock_translate:
+        await worker_module.handle_create(activity)
+
+    mock_translate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_create_ignores_mention_tag_pointing_to_other_actor():
+    """Tag Mention existe mas aponta pra outro ator — mesmo com a URL do bot no HTML, não deve responder."""
+    note = Note(
+        id="https://mastodon.social/statuses/51",
+        attributed_to="https://mastodon.social/users/fulano",
+        content=(
+            '<p><span class="mention">'
+            '<a href="https://bot.test/users/testbot">@testbot</a>'
+            "</span> oi</p>"
+        ),
+        tag=[
+            {
+                "type": "Mention",
+                "href": "https://mastodon.social/users/outrapessoa",
+                "name": "@outrapessoa",
+            }
+        ],
+        to=["https://www.w3.org/ns/activitystreams#Public"],
+    )
+    activity = _build_activity(note)
+
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "translate_text") as mock_translate:
+        await worker_module.handle_create(activity)
+
+    mock_translate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_create_detects_mention_via_tag_without_url_in_content():
+    """
+    Falso negativo da lógica antiga: a tag Mention aponta pro bot mesmo sem
+    a URL aparecer literalmente no HTML (formatação diferente entre
+    implementações) — deve responder.
+    """
+    note = Note(
+        id="https://mastodon.social/statuses/52",
+        attributed_to="https://mastodon.social/users/fulano",
+        content='<p><span class="h-card"><a href="/@testbot">@testbot</a></span> Bonjour</p>',
+        tag=[{"type": "Mention", "href": "https://bot.test/users/testbot", "name": "@testbot"}],
+        to=["https://www.w3.org/ns/activitystreams#Public"],
+    )
+    activity = _build_activity(note)
+    remote_actor = _make_remote_actor()
+    mock_fetch_client, mock_post_client = _mock_ap_client(remote_actor)
+
+    import workers.inbox_worker as worker_module
+
+    with (
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "fr"}),
+        ) as mock_translate,
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
+    ):
+        await worker_module.handle_create(activity)
+
+    mock_translate.assert_called_once()
+
+
+def test_mentions_bot_matches_raw_dict_tag():
+    """
+    _mentions_bot também reconhece a tag como dict puro — o pydantic do Note
+    coage dicts pra um tipo de objeto (ver testes acima), mas isso não é
+    garantido em todo caminho de construção do Note.
+    """
+    from workers.inbox_worker import _mentions_bot
+
+    tags = [{"type": "Mention", "href": "https://bot.test/users/testbot", "name": "@testbot"}]
+    assert _mentions_bot(tags, "https://bot.test/users/testbot") is True
+
+
+def test_mentions_bot_ignores_raw_dict_tag_for_other_actor():
+    from workers.inbox_worker import _mentions_bot
+
+    tags = [{"type": "Mention", "href": "https://mastodon.social/users/outrapessoa", "name": "@x"}]
+    assert _mentions_bot(tags, "https://bot.test/users/testbot") is False
 
 
 @pytest.mark.asyncio
@@ -596,6 +713,7 @@ async def test_handle_create_truncates_long_text():
             '<a href="https://bot.test/users/testbot">@testbot</a>'
             f"</span> {long_text}</p>"
         ),
+        tag=[{"type": "Mention", "href": "https://bot.test/users/testbot", "name": "@testbot"}],
         to=["https://www.w3.org/ns/activitystreams#Public"],
     )
     activity = _build_activity(note)
