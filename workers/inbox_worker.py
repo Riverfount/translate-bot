@@ -4,8 +4,11 @@ workers/inbox_worker.py
 Worker assíncrono que processa atividades Create recebidas no inbox do bot.
 
 Fluxo:
-1. No startup, recarrega itens pendentes de uma execução anterior (load_pending)
-2. Consome atividades da fila (activity_queue)
+1. No startup, recarrega itens pendentes de uma execução anterior
+   (load_pending, chamado uma única vez) e inicia N loops consumidores
+   em paralelo sobre a mesma fila (settings.worker_concurrency) — um
+   item lento não bloqueia o processamento dos demais
+2. Cada loop consome atividades da fila (activity_queue)
 3. Ignora a atividade se activity.id já foi processado (reentrega do
    Mastodon após uma resposta já enviada com sucesso)
 4. Verifica se o bot foi mencionado via a tag Mention estruturada do Note
@@ -267,9 +270,10 @@ async def handle_create(activity: Create) -> None:
         log.error(f"Erro ao entregar resposta para {author_url}: {e}", exc_info=True)
 
 
-async def run_worker() -> None:
-    log.info("Worker de inbox iniciado")
-    await load_pending()
+DEFAULT_WORKER_CONCURRENCY = 3
+
+
+async def _worker_loop() -> None:
     while True:
         try:
             row_id, activity = await asyncio.wait_for(activity_queue.get(), timeout=5.0)
@@ -283,3 +287,18 @@ async def run_worker() -> None:
             log.error(f"Erro no worker: {e}", exc_info=True)
         finally:
             activity_queue.task_done()
+
+
+async def run_worker() -> None:
+    """
+    Recarrega os itens pendentes de uma execução anterior (uma única vez)
+    e então roda N loops consumidores em paralelo sobre a mesma fila —
+    um item lento (ex: LibreTranslate instável) não bloqueia os demais.
+    N é definido por settings.worker_concurrency.
+    """
+    log.info("Worker de inbox iniciado")
+    await load_pending()
+
+    concurrency = settings.get("worker_concurrency", DEFAULT_WORKER_CONCURRENCY)
+    log.info(f"Iniciando {concurrency} workers de inbox em paralelo")
+    await asyncio.gather(*[_worker_loop() for _ in range(concurrency)])

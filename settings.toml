@@ -9,6 +9,7 @@ database_url = "sqlite+aiosqlite:///./bot.db"
 private_key_path = "keys/private.pem"
 public_key_path = "keys/public.pem"
 mention_cooldown_seconds = 30
+worker_concurrency = 3
 
 [development]
 domain = "0bfe-189-14-58-11.ngrok-free.app"

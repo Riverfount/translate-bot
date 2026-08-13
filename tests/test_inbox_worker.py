@@ -1079,3 +1079,147 @@ async def test_run_worker_continues_after_error():
             pass
 
     assert call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Concorrência entre workers (issue #19)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_worker_processes_items_concurrently(monkeypatch):
+    """
+    Com concorrência > 1, um item lento não deve bloquear o processamento
+    de outro item já disponível na fila.
+    """
+    import workers.inbox_worker as worker_module
+
+    monkeypatch.setattr(worker_module.settings, "worker_concurrency", 2, raising=False)
+
+    activity_a = _build_activity(
+        _note_without_mention(), actor_url="https://mastodon.social/users/a"
+    )
+    activity_b = _build_activity(
+        _note_without_mention(), actor_url="https://mastodon.social/users/b"
+    )
+
+    test_queue: asyncio.Queue = asyncio.Queue()
+    await test_queue.put((1, activity_a))
+    await test_queue.put((2, activity_b))
+
+    block_a = asyncio.Event()
+    processed: list = []
+
+    async def handle_side_effect(activity):
+        if activity is activity_a:
+            await block_a.wait()
+        processed.append(activity)
+
+    with patch.object(worker_module, "handle_create", side_effect=handle_side_effect):
+        worker_module.activity_queue = test_queue
+        task = asyncio.create_task(worker_module.run_worker())
+
+        # activity_a está travada em block_a — se o processamento fosse
+        # serial, activity_b nunca seria alcançada enquanto isso.
+        await asyncio.sleep(0.1)
+        assert activity_b in processed
+        assert activity_a not in processed
+
+        block_a.set()
+        await asyncio.sleep(0.1)
+        assert activity_a in processed
+
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_run_worker_uses_configured_concurrency(monkeypatch):
+    """O número de workers concorrentes respeita settings.worker_concurrency."""
+    import workers.inbox_worker as worker_module
+
+    monkeypatch.setattr(worker_module.settings, "worker_concurrency", 3, raising=False)
+
+    started = asyncio.Event()
+    concurrent_count = 0
+    max_concurrent = 0
+
+    async def fake_worker_loop():
+        nonlocal concurrent_count, max_concurrent
+        concurrent_count += 1
+        max_concurrent = max(max_concurrent, concurrent_count)
+        started.set()
+        try:
+            await asyncio.sleep(10)
+        finally:
+            concurrent_count -= 1
+
+    with patch.object(worker_module, "_worker_loop", fake_worker_loop):
+        task = asyncio.create_task(worker_module.run_worker())
+        await asyncio.sleep(0.1)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    assert max_concurrent == 3
+
+
+@pytest.mark.asyncio
+async def test_run_worker_cancellation_stops_all_loops(monkeypatch):
+    """
+    Cancelar a task de run_worker() deve encerrar TODOS os _worker_loop
+    internos (propagado via asyncio.gather), não só a task externa —
+    essencial pro shutdown gracioso no lifespan do FastAPI (app/main.py).
+    """
+    import workers.inbox_worker as worker_module
+
+    monkeypatch.setattr(worker_module.settings, "worker_concurrency", 3, raising=False)
+
+    running = 0
+
+    async def fake_worker_loop():
+        nonlocal running
+        running += 1
+        try:
+            await asyncio.sleep(10)
+        finally:
+            running -= 1
+
+    with patch.object(worker_module, "_worker_loop", fake_worker_loop):
+        task = asyncio.create_task(worker_module.run_worker())
+        await asyncio.sleep(0.1)
+        assert running == 3
+
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    assert running == 0
+
+
+@pytest.mark.asyncio
+async def test_run_worker_calls_load_pending_only_once_regardless_of_concurrency(
+    mock_load_pending, monkeypatch
+):
+    """load_pending é chamado uma única vez, não uma vez por worker concorrente."""
+    import workers.inbox_worker as worker_module
+
+    monkeypatch.setattr(worker_module.settings, "worker_concurrency", 5, raising=False)
+    worker_module.activity_queue = asyncio.Queue()
+
+    task = asyncio.create_task(worker_module.run_worker())
+    await asyncio.sleep(0.1)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    mock_load_pending.assert_called_once()
