@@ -113,7 +113,10 @@ def register_handlers(app: ActivityPubServer) -> None:
 
         Enfileira ctx.activity (não ctx) para que o worker não dependa
         do contexto interno do apkit, que não é válido fora do escopo do handler.
+
+        enqueue também persiste a atividade em banco — se o processo cair
+        antes do worker processá-la, ela é recuperada no próximo startup.
         """
         log.info(f"Create recebido de {ctx.activity.actor}")
-        await queue_module.activity_queue.put(ctx.activity)
+        await queue_module.enqueue(ctx.activity)
         return Response(status_code=202)

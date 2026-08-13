@@ -4,11 +4,14 @@ workers/inbox_worker.py
 Worker assíncrono que processa atividades Create recebidas no inbox do bot.
 
 Fluxo:
-1. Consome atividades da fila (activity_queue)
-2. Verifica se o bot foi mencionado no post
-3. Extrai o texto puro removendo tags HTML
-4. Traduz via LibreTranslate
-5. Monta um Note de resposta e entrega no inbox do autor
+1. No startup, recarrega itens pendentes de uma execução anterior (load_pending)
+2. Consome atividades da fila (activity_queue)
+3. Verifica se o bot foi mencionado no post
+4. Extrai o texto puro removendo tags HTML
+5. Traduz via LibreTranslate
+6. Monta um Note de resposta e entrega no inbox do autor
+7. Remove a atividade da persistência (dequeue) só após sucesso —
+   erro mantém o item para retry no próximo restart do processo
 """
 
 import asyncio
@@ -27,7 +30,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa as rsa_module
 from app.activitypub.keys import get_bot_keys
 from app.config import settings
 from app.services.note_store import store_note
-from app.services.queue import activity_queue
+from app.services.queue import activity_queue, dequeue, load_pending
 from app.services.translate import translate_text
 
 log = logging.getLogger(__name__)
@@ -159,12 +162,17 @@ async def handle_create(activity: Create) -> None:
 
 async def run_worker() -> None:
     log.info("Worker de inbox iniciado")
+    await load_pending()
     while True:
         try:
-            ctx = await asyncio.wait_for(activity_queue.get(), timeout=5.0)
-            await handle_create(ctx)
-            activity_queue.task_done()
+            row_id, activity = await asyncio.wait_for(activity_queue.get(), timeout=5.0)
         except asyncio.TimeoutError:
             continue
+
+        try:
+            await handle_create(activity)
+            await dequeue(row_id)
         except Exception as e:
             log.error(f"Erro no worker: {e}", exc_info=True)
+        finally:
+            activity_queue.task_done()
