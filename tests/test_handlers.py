@@ -129,8 +129,8 @@ async def test_on_follow_returns_400_when_actor_not_resolved():
 
 
 @pytest.mark.asyncio
-async def test_on_create_enqueues_activity_not_ctx_and_returns_202():
-    """Verifica que ctx.activity é enfileirado, não o ctx inteiro."""
+async def test_on_create_enqueues_activity_not_ctx_and_returns_202(in_memory_db):
+    """Verifica que ctx.activity é enfileirado (persistido + em memória), não o ctx inteiro."""
     test_queue: asyncio.Queue = asyncio.Queue()
     ctx = _make_create_ctx()
 
@@ -142,14 +142,37 @@ async def test_on_create_enqueues_activity_not_ctx_and_returns_202():
 
     assert response.status_code == 202
     assert not test_queue.empty()
-    queued_item = await test_queue.get()
+    row_id, queued_activity = await test_queue.get()
     # deve ser o activity, não o ctx
-    assert queued_item is ctx.activity
-    assert isinstance(queued_item, Create)
+    assert queued_activity is ctx.activity
+    assert isinstance(queued_activity, Create)
+    assert isinstance(row_id, int)
 
 
 @pytest.mark.asyncio
-async def test_on_create_does_not_call_translate():
+async def test_on_create_persists_activity_to_db(in_memory_db):
+    """A atividade enfileirada também é persistida (sobrevive a um crash do worker)."""
+    from app.models.queued_activity import QueuedActivity
+    from app.services import queue as queue_module
+
+    test_queue: asyncio.Queue = asyncio.Queue()
+    ctx = _make_create_ctx()
+
+    with patch.object(queue_module, "activity_queue", test_queue):
+        handlers = _get_handlers()
+        await handlers["Create"](ctx)
+
+    async with in_memory_db() as session:
+        from sqlalchemy import select
+
+        result = await session.execute(select(QueuedActivity))
+        rows = result.scalars().all()
+
+    assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_on_create_does_not_call_translate(in_memory_db):
     test_queue: asyncio.Queue = asyncio.Queue()
     ctx = _make_create_ctx()
 

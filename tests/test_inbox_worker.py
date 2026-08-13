@@ -37,6 +37,29 @@ def mock_store_note():
 
 
 # ---------------------------------------------------------------------------
+# A fila é persistida em banco (issue #12) — load_pending/dequeue mockados
+# aqui porque estes são testes unitários do worker, não da persistência
+# da fila (ver test_queue.py).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def mock_load_pending():
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "load_pending", AsyncMock()) as mock:
+        yield mock
+
+
+@pytest.fixture(autouse=True)
+def mock_dequeue():
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "dequeue", AsyncMock()) as mock:
+        yield mock
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -386,11 +409,11 @@ async def test_handle_create_logs_error_on_send_failure():
 
 
 @pytest.mark.asyncio
-async def test_run_worker_processes_activity_from_queue():
-    """run_worker consome activity da fila (não ctx)."""
+async def test_run_worker_processes_activity_from_queue(mock_dequeue):
+    """run_worker consome (row_id, activity) da fila (não ctx)."""
     activity = _build_activity(_note_without_mention())
     test_queue: asyncio.Queue = asyncio.Queue()
-    await test_queue.put(activity)
+    await test_queue.put((42, activity))
 
     import workers.inbox_worker as worker_module
 
@@ -405,6 +428,69 @@ async def test_run_worker_processes_activity_from_queue():
             pass
 
     mock_handle.assert_called_once_with(activity)
+
+
+@pytest.mark.asyncio
+async def test_run_worker_dequeues_after_successful_processing(mock_dequeue):
+    """Após handle_create ter sucesso, o item é removido da persistência (dequeue)."""
+    activity = _build_activity(_note_without_mention())
+    test_queue: asyncio.Queue = asyncio.Queue()
+    await test_queue.put((42, activity))
+
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "handle_create", AsyncMock()):
+        worker_module.activity_queue = test_queue
+        task = asyncio.create_task(worker_module.run_worker())
+        await test_queue.join()
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    mock_dequeue.assert_called_once_with(42)
+
+
+@pytest.mark.asyncio
+async def test_run_worker_does_not_dequeue_when_handle_create_fails(mock_dequeue):
+    """Se handle_create falhar, o item NÃO é removido — fica para retry no próximo restart."""
+    activity = _build_activity(_note_without_mention())
+    test_queue: asyncio.Queue = asyncio.Queue()
+    await test_queue.put((42, activity))
+
+    import workers.inbox_worker as worker_module
+
+    with patch.object(
+        worker_module, "handle_create", AsyncMock(side_effect=RuntimeError("falhou"))
+    ):
+        worker_module.activity_queue = test_queue
+        task = asyncio.create_task(worker_module.run_worker())
+        await test_queue.join()
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    mock_dequeue.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_worker_calls_load_pending_on_startup(mock_load_pending):
+    """run_worker recarrega itens pendentes de uma execução anterior no startup."""
+    import workers.inbox_worker as worker_module
+
+    worker_module.activity_queue = asyncio.Queue()
+    task = asyncio.create_task(worker_module.run_worker())
+    await asyncio.sleep(0.1)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    mock_load_pending.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -529,8 +615,8 @@ async def test_run_worker_continues_after_error():
     activity2 = _build_activity(_note_without_mention())
 
     test_queue: asyncio.Queue = asyncio.Queue()
-    await test_queue.put(activity1)
-    await test_queue.put(activity2)
+    await test_queue.put((1, activity1))
+    await test_queue.put((2, activity2))
 
     call_count = 0
 
