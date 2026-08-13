@@ -45,4 +45,3 @@ jobs:
           ENV_FOR_DYNACONF: testing
           TRANSLATEBOT_DOMAIN: bot.test
           TRANSLATEBOT_BOT_USERNAME: testbot
-          TRANSLATEBOT_GOOGLE_TRANSLATE_API_KEY: fake-key-for-tests
