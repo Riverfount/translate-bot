@@ -84,6 +84,30 @@ def mock_mark_processed():
 
 
 # ---------------------------------------------------------------------------
+# Cooldown por autor (issue #17) — mockados aqui porque estes são testes
+# unitários do worker, não da persistência (ver test_rate_limit.py).
+# is_rate_limited default False: por padrão, os testes exercitam o caminho
+# normal (autor fora do cooldown).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def mock_is_rate_limited():
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "is_rate_limited", AsyncMock(return_value=False)) as mock:
+        yield mock
+
+
+@pytest.fixture(autouse=True)
+def mock_record_request():
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "record_request", AsyncMock()) as mock:
+        yield mock
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -617,6 +641,94 @@ async def test_handle_create_does_not_mark_processed_when_delivery_fails(mock_ma
 
 
 @pytest.mark.asyncio
+async def test_handle_create_skips_when_rate_limited(mock_is_rate_limited):
+    """Se o autor está em cooldown, handle_create não traduz nem responde."""
+    author_url = "https://mastodon.social/users/fulano"
+    activity = _build_activity(_note_with_mention("Bonjour"), actor_url=author_url)
+    mock_is_rate_limited.return_value = True
+
+    import workers.inbox_worker as worker_module
+
+    with patch.object(worker_module, "translate_text") as mock_translate:
+        await worker_module.handle_create(activity)
+
+    mock_is_rate_limited.assert_awaited_once_with(author_url)
+    mock_translate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_create_does_not_record_request_when_rate_limited(
+    mock_is_rate_limited, mock_record_request
+):
+    """Se o autor está em cooldown, record_request não é chamado de novo."""
+    activity = _build_activity(_note_with_mention("Bonjour"))
+    mock_is_rate_limited.return_value = True
+
+    import workers.inbox_worker as worker_module
+
+    await worker_module.handle_create(activity)
+
+    mock_record_request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_create_records_request_before_translating(mock_record_request):
+    """
+    Ao decidir prosseguir (autor fora do cooldown), record_request é chamado
+    antes de gastar uma chamada à API de tradução — protege a cota mesmo se
+    a entrega da resposta falhar depois.
+    """
+    author_url = "https://mastodon.social/users/fulano"
+    activity = _build_activity(_note_with_mention("Bonjour"), actor_url=author_url)
+    remote_actor = _make_remote_actor(author_url)
+    mock_fetch_client, mock_post_client = _mock_ap_client(remote_actor)
+
+    import workers.inbox_worker as worker_module
+
+    with (
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "fr"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
+    ):
+        await worker_module.handle_create(activity)
+
+    mock_record_request.assert_awaited_once_with(author_url)
+
+
+@pytest.mark.asyncio
+async def test_handle_create_records_request_even_when_delivery_fails(mock_record_request):
+    """record_request protege a cota da API de tradução mesmo se a entrega falhar depois."""
+    author_url = "https://mastodon.social/users/fulano"
+    activity = _build_activity(_note_with_mention("Bonjour"), actor_url=author_url)
+    remote_actor = _make_remote_actor(author_url)
+    mock_fetch_client, mock_post_client = _mock_ap_client(remote_actor)
+    mock_post_client.__aenter__.return_value.post.side_effect = Exception("connection refused")
+
+    import workers.inbox_worker as worker_module
+
+    with (
+        patch.object(
+            worker_module,
+            "translate_text",
+            AsyncMock(return_value={"translated": "Olá", "detected_source": "fr"}),
+        ),
+        patch.object(
+            worker_module, "ActivityPubClient", side_effect=[mock_fetch_client, mock_post_client]
+        ),
+        patch.object(worker_module, "get_bot_keys", AsyncMock(return_value=[_make_actor_key()])),
+    ):
+        await worker_module.handle_create(activity)
+
+    mock_record_request.assert_awaited_once_with(author_url)
+
+
+@pytest.mark.asyncio
 async def test_run_worker_processes_activity_from_queue(mock_dequeue):
     """run_worker consome (row_id, activity) da fila (não ctx)."""
     activity = _build_activity(_note_without_mention())
@@ -741,7 +853,10 @@ async def test_handle_create_truncates_long_text():
 
 @pytest.mark.asyncio
 async def test_handle_create_ignores_invalid_actor_url():
-    """Actor com URL inválida (sem scheme/netloc) → não tenta buscar actor remoto."""
+    """
+    Actor com URL inválida (sem scheme/netloc) → não tenta buscar actor remoto
+    nem traduzir (a validação acontece antes do rate limit/tradução).
+    """
     activity = _build_activity(_note_with_mention("Hello"), actor_url="not-a-valid-url")
 
     import workers.inbox_worker as worker_module
@@ -751,12 +866,13 @@ async def test_handle_create_ignores_invalid_actor_url():
             worker_module,
             "translate_text",
             AsyncMock(return_value={"translated": "Olá", "detected_source": "en"}),
-        ),
+        ) as mock_translate,
         patch.object(worker_module, "ActivityPubClient") as mock_ap_client,
     ):
         await worker_module.handle_create(activity)
 
     mock_ap_client.assert_not_called()
+    mock_translate.assert_not_called()
 
 
 @pytest.mark.asyncio

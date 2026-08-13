@@ -153,6 +153,7 @@ async def in_memory_db():
 
     import app.database
     import app.models.follower  # noqa: F401 — registra o modelo no metadata
+    import app.models.mention_rate_limit  # noqa: F401 — registra o modelo no metadata
     import app.models.note  # noqa: F401 — registra o modelo no metadata
     import app.models.processed_activity  # noqa: F401 — registra o modelo no metadata
     import app.models.queued_activity  # noqa: F401 — registra o modelo no metadata
