@@ -8,7 +8,8 @@ Fluxo:
 2. Consome atividades da fila (activity_queue)
 3. Ignora a atividade se activity.id já foi processado (reentrega do
    Mastodon após uma resposta já enviada com sucesso)
-4. Verifica se o bot foi mencionado no post
+4. Verifica se o bot foi mencionado via a tag Mention estruturada do Note
+   (não por substring no HTML — ver _mentions_bot)
 5. Extrai o texto puro removendo tags HTML
 6. Traduz via LibreTranslate
 7. Monta um Note de resposta e entrega no inbox do autor
@@ -23,6 +24,7 @@ import html
 import logging
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 from urllib.parse import urlparse
 
 from apkit.client.asyncio.client import ActivityPubClient
@@ -43,6 +45,29 @@ log = logging.getLogger(__name__)
 MAX_TRANSLATE_CHARS = 500
 
 
+def _mentions_bot(tags: list[Any], bot_actor_url: str) -> bool:
+    """
+    Verifica se o bot foi mencionado via a lista estruturada `tag` do Note
+    (item do tipo Mention com href apontando pro ator do bot), em vez de
+    procurar a URL como substring no HTML do content.
+
+    A checagem é feita via getattr/dict.get em vez de isinstance porque,
+    dependendo de como o Note chegou (JSON-LD expandido ou construído
+    direto via pydantic), o item pode virar uma instância de Mention, Link,
+    Hashtag ou um dict puro — mas sempre expõe type/href do mesmo jeito.
+    """
+    for tag in tags or []:
+        if isinstance(tag, dict):
+            tag_type = tag.get("type")
+            tag_href = tag.get("href")
+        else:
+            tag_type = getattr(tag, "type", None)
+            tag_href = getattr(tag, "href", None)
+        if tag_type == "Mention" and tag_href == bot_actor_url:
+            return True
+    return False
+
+
 async def handle_create(activity: Create) -> None:
     if await already_processed(activity.id):
         log.info(f"Activity já processada anteriormente, ignorando: {activity.id}")
@@ -60,7 +85,7 @@ async def handle_create(activity: Create) -> None:
     bot_actor_url = f"https://{settings.domain}/users/{settings.bot_username}"
     content_html = note.content or ""
 
-    if bot_actor_url not in content_html:
+    if not _mentions_bot(note.tag, bot_actor_url):
         return
 
     # Extrai texto puro removendo a menção ao bot
