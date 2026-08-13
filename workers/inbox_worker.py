@@ -24,6 +24,7 @@ Fluxo:
 import asyncio
 import html
 import logging
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -69,6 +70,68 @@ def _mentions_bot(tags: list[Any], bot_actor_url: str) -> bool:
         if tag_type == "Mention" and tag_href == bot_actor_url:
             return True
     return False
+
+
+# Caracteres que não podem ficar sozinhos logo após um corte — sinalizam que
+# pertencem ao cluster de grafema anterior (emoji composto, acento
+# combinante, seletor de variação, indicador regional de bandeira).
+_ZWJ = "‍"
+_VARIATION_SELECTORS = {"︎", "️"}
+_REGIONAL_INDICATOR_RANGE = range(0x1F1E6, 0x1F1FF + 1)
+_SKIN_TONE_MODIFIER_RANGE = range(0x1F3FB, 0x1F3FF + 1)
+
+
+def _is_grapheme_boundary(text: str, index: int) -> bool:
+    """
+    Retorna True se cortar `text` logo antes de `index` não quebra um
+    cluster de grafema (emoji composto via ZWJ, acento combinante, bandeira,
+    modificador de tom de pele). Não é uma implementação completa de
+    UAX #29 — cobre os casos mais comuns o suficiente para truncar texto
+    de posts sem gerar fragmentos de emoji quebrados.
+    """
+    if index <= 0 or index >= len(text):
+        return True
+
+    before, after = text[index - 1], text[index]
+
+    if unicodedata.combining(after):
+        return False
+    if after in _VARIATION_SELECTORS:
+        return False
+    if before == _ZWJ or after == _ZWJ:
+        return False
+    if ord(after) in _SKIN_TONE_MODIFIER_RANGE:
+        return False
+    if ord(before) in _REGIONAL_INDICATOR_RANGE and ord(after) in _REGIONAL_INDICATOR_RANGE:
+        return False
+
+    return True
+
+
+def _smart_truncate(text: str, max_chars: int) -> str:
+    """
+    Trunca `text` em até `max_chars`, sem cortar no meio de uma palavra
+    nem de um cluster de grafema (emoji composto, acento, bandeira, etc).
+
+    Corta primeiro no limite de caracteres, recua até o corte cair numa
+    fronteira de grafema válida, e então recua até o último espaço — a
+    menos que não haja espaço algum no trecho (palavra única muito longa),
+    caso em que o corte por grafema é mantido como está.
+    """
+    if len(text) <= max_chars:
+        return text
+
+    cut = max_chars
+    while cut > 0 and not _is_grapheme_boundary(text, cut):
+        cut -= 1
+
+    truncated = text[:cut]
+
+    last_space = truncated.rfind(" ")
+    if last_space > 0:
+        truncated = truncated[:last_space]
+
+    return truncated.rstrip()
 
 
 async def handle_create(activity: Create) -> None:
@@ -117,7 +180,7 @@ async def handle_create(activity: Create) -> None:
 
     if len(plain_text) > MAX_TRANSLATE_CHARS:
         log.warning(f"Texto truncado de {len(plain_text)} para {MAX_TRANSLATE_CHARS} caracteres")
-        plain_text = plain_text[:MAX_TRANSLATE_CHARS]
+        plain_text = _smart_truncate(plain_text, MAX_TRANSLATE_CHARS)
 
     # Traduz o texto
     result = await translate_text(plain_text)

@@ -851,6 +851,121 @@ async def test_handle_create_truncates_long_text():
     assert len(translated_text) == 500
 
 
+# ---------------------------------------------------------------------------
+# _smart_truncate — truncamento sem cortar palavra ou cluster de grafema
+# ao meio (issue #18)
+# ---------------------------------------------------------------------------
+
+
+def test_smart_truncate_returns_unchanged_when_within_limit():
+    from workers.inbox_worker import _smart_truncate
+
+    text = "um texto curto"
+    assert _smart_truncate(text, 500) == text
+
+
+def test_smart_truncate_cuts_at_word_boundary():
+    from workers.inbox_worker import _smart_truncate
+
+    text = "uma frase com varias palavras separadas por espaco"
+    # limite cai bem no meio de "palavras"
+    cut_index = text.index("palavras") + 4
+    result = _smart_truncate(text, cut_index)
+
+    assert result == "uma frase com varias"
+    assert not result.endswith(" ")
+
+
+def test_smart_truncate_falls_back_to_char_cut_when_no_space():
+    """Palavra única maior que o limite, sem espaço algum — corta no limite mesmo."""
+    from workers.inbox_worker import _smart_truncate
+
+    text = "A" * 600
+    result = _smart_truncate(text, 500)
+
+    assert len(result) == 500
+
+
+def test_smart_truncate_does_not_split_combining_mark():
+    """'e' + acento combinante (´) não deve ser separado pelo corte."""
+    from workers.inbox_worker import _smart_truncate
+
+    base_text = "texto normal " + "x" * 480
+    combining_char = "é"  # "é" decomposto: e + combining acute accent
+    text = base_text + combining_char + " resto"
+
+    # corta bem entre o "e" e o acento combinante
+    cut_index = len(base_text) + 1
+    result = _smart_truncate(text, cut_index)
+
+    # o resultado não deve terminar com um "e" seguido de acento cortado —
+    # ou os dois ficam juntos, ou os dois ficam de fora
+    assert not result.endswith("e")
+
+
+def test_smart_truncate_does_not_split_zwj_emoji_sequence():
+    """Família 👨‍👩‍👧‍👦 (unida por ZWJ) não deve ser cortada no meio."""
+    from workers.inbox_worker import _smart_truncate
+
+    family = "👨‍👩‍👧‍👦"
+    base_text = "x" * 400 + " "
+    text = base_text + family + " resto do texto"
+
+    # corta no meio da sequência ZWJ da família
+    cut_index = len(base_text) + 3
+    result = _smart_truncate(text, cut_index)
+
+    assert not result.endswith("‍")
+    assert not result.endswith("👨")
+    assert not result.endswith("👨‍👩")
+
+
+def test_smart_truncate_does_not_split_flag_emoji():
+    """Bandeira 🇧🇷 (par de regional indicators) não deve ser cortada no meio."""
+    from workers.inbox_worker import _smart_truncate
+
+    flag = "\U0001f1e7\U0001f1f7"  # 🇧🇷 — dois regional indicators
+    base_text = "x" * 400 + " "
+    text = base_text + flag + " resto do texto"
+
+    # corta exatamente entre os dois regional indicators
+    cut_index = len(base_text) + 1
+    result = _smart_truncate(text, cut_index)
+
+    assert not result.endswith("\U0001f1e7")
+
+
+def test_smart_truncate_does_not_split_skin_tone_modifier():
+    """👍🏽 (emoji + modificador de tom de pele) não deve ser cortado no meio."""
+    from workers.inbox_worker import _smart_truncate
+
+    thumbs_up_medium = "\U0001f44d\U0001f3fd"  # 👍 + modificador de tom de pele
+    base_text = "x" * 400 + " "
+    text = base_text + thumbs_up_medium + " resto do texto"
+
+    cut_index = len(base_text) + 1
+    result = _smart_truncate(text, cut_index)
+
+    assert not result.endswith("\U0001f44d")
+
+
+def test_is_grapheme_boundary_true_at_start_and_end():
+    from workers.inbox_worker import _is_grapheme_boundary
+
+    text = "qualquer texto"
+    assert _is_grapheme_boundary(text, 0) is True
+    assert _is_grapheme_boundary(text, len(text)) is True
+
+
+def test_is_grapheme_boundary_false_before_variation_selector():
+    """Emoji base + seletor de variação (️) — cortar entre os dois não é uma fronteira válida."""
+    from workers.inbox_worker import _is_grapheme_boundary
+
+    text = "texto ❤️ fim"  # ❤ (U+2764) + variation selector (U+FE0F)
+    variation_selector_index = text.index("️")
+    assert _is_grapheme_boundary(text, variation_selector_index) is False
+
+
 @pytest.mark.asyncio
 async def test_handle_create_ignores_invalid_actor_url():
     """
