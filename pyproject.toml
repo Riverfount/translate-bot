@@ -1,6 +1,6 @@
 [project]
 name        = "translate-bot"
-version     = "1.1.1"
+version     = "1.1.2"
 description = "ActivityPub translation bot powered by apkit"
 requires-python = ">=3.14"
 
