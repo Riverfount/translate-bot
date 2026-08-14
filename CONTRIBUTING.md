@@ -95,7 +95,7 @@ Todos os checks devem passar antes de abrir o PR.
 |---|---|
 | **ruff** | Lint e formatação (substitui flake8, isort, black) |
 | **pytest** | Testes unitários e de integração |
-| **anyio** | Testes assíncronos |
+| **pytest-asyncio** | Testes assíncronos |
 
 A configuração do ruff e do pytest está em `pyproject.toml`.
 
@@ -109,11 +109,11 @@ Os testes ficam em `tests/`. Para adicionar testes:
 tests/
 ├── test_handlers.py      # handlers ActivityPub
 ├── test_translate.py     # serviço de tradução
-├── test_actor.py         # perfil do bot
+├── test_actor_and_keys.py # perfil e chaves do bot
 └── ...
 ```
 
-Use `pytest-anyio` para funções `async`. Veja os testes existentes como referência.
+Use `@pytest.mark.asyncio` para funções `async` (ou dependa do `asyncio_mode = "auto"` já configurado em `pyproject.toml`). Veja os testes existentes como referência.
 
 ---
 
