@@ -6,7 +6,7 @@ Mencione `@translatebot@seu-dominio.com` em qualquer post e ele responde com o c
 
 ```
 @fulano@mastodon.social
-Bonjour tout le monde, comment ça va ?
+Bonjour tout le monde, comment ça va ? @translatebot@seu-dominio.com
 
 @translatebot@seu-dominio.com
 🌐 [FR → PT] Olá a todos, como vão vocês?
