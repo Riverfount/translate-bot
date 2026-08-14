@@ -1,0 +1,52 @@
+site_name: translate-bot
+site_description: Bot para o Fediverso que traduz posts automaticamente quando mencionado.
+site_url: https://riverfount.github.io/translate-bot/
+repo_url: https://github.com/Riverfount/translate-bot
+repo_name: Riverfount/translate-bot
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; Vicente Marçal
+
+theme:
+  name: material
+  language: pt-BR
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: Mudar para modo escuro
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Mudar para modo claro
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Início: index.md
+  - Instalação: instalacao.md
+  - Configuração: configuracao.md
+  - Deploy com Docker: deploy-docker.md
+  - Arquitetura: arquitetura.md
+  - Desenvolvimento: desenvolvimento.md

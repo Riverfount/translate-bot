@@ -106,6 +106,16 @@ docker-stop: ## Para e remove o container
 docker-logs: ## Exibe os logs do container em tempo real
 	docker logs -f $(IMAGE_NAME)
 
+# ─── documentação ─────────────────────────────────────────────────────────────
+
+.PHONY: docs-serve
+docs-serve: ## Sobe o site de docs localmente com hot-reload
+	uv run --group docs mkdocs serve
+
+.PHONY: docs-build
+docs-build: ## Builda o site de docs estático em site/
+	uv run --group docs mkdocs build
+
 # ─── limpeza ──────────────────────────────────────────────────────────────────
 
 .PHONY: clean
