@@ -169,7 +169,7 @@ async def handle_create(activity: Create) -> None:
 
     # Extrai texto puro removendo a menção ao bot
     soup = BeautifulSoup(content_html, "html.parser")
-    for tag in soup.find_all("span", {"class": "mention"}):
+    for tag in soup.find_all(class_="mention"):
         tag.decompose()
     plain_text = soup.get_text(separator=" ").strip()
 
