@@ -82,7 +82,7 @@ async def nodeinfo() -> Response:
         ActivityResponse(
             Nodeinfo(
                 version="2.1",
-                software=NodeinfoSoftware(name="translate-bot", version="1.1.1"),
+                software=NodeinfoSoftware(name="translate-bot", version="1.1.2"),
                 protocols=["activitypub"],
                 services=NodeinfoServices(inbound=[], outbound=[]),
                 openRegistrations=False,
